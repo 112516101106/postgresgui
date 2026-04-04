@@ -102,7 +102,7 @@ struct ConnectionFormView: View {
             }
             .navigationTitle(viewModel.navigationTitle)
         }
-        .frame(width: 500, height: viewModel.sshEnabled ? 700 : 440)
+        .frame(width: 500, height: viewModel.sshEnabled ? 700 : 500)
         .animation(.easeInOut(duration: 0.2), value: viewModel.sshEnabled)
         .alert("Keychain Access Denied", isPresented: $viewModel.showKeychainAlert) {
             Button("OK") {
@@ -140,20 +140,32 @@ struct ConnectionFormView: View {
                 focused: $isNameFieldFocused
             )
 
+            sshTunnelSection
+
+            databaseSectionHeader
+
             formRow(label: "Host", alignment: .top) {
-                TextEditor(text: $viewModel.host)
-                    .font(.body)
-                    .frame(height: 40)
-                    .padding(4)
-                    .background(Color(nsColor: viewModel.isEditing ? .controlBackgroundColor : .textBackgroundColor))
-                    .cornerRadius(4)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
-                    )
-                    .onChange(of: viewModel.host) { _, newValue in
-                        viewModel.handleHostChange(newValue)
+                VStack(alignment: .leading, spacing: 2) {
+                    TextEditor(text: $viewModel.host)
+                        .font(.body)
+                        .frame(height: 40)
+                        .padding(4)
+                        .background(Color(nsColor: viewModel.isEditing ? .controlBackgroundColor : .textBackgroundColor))
+                        .cornerRadius(4)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+                        )
+                        .onChange(of: viewModel.host) { _, newValue in
+                            viewModel.handleHostChange(newValue)
+                        }
+
+                    if viewModel.sshEnabled {
+                        Text("DB host as seen from SSH server")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
+                }
             }
 
             formRow(label: "Port") {
@@ -195,8 +207,6 @@ struct ConnectionFormView: View {
             formRow(label: "Password") {
                 passwordField
             }
-
-            sshTunnelSection
         }
     }
 
@@ -204,9 +214,6 @@ struct ConnectionFormView: View {
 
     private var sshTunnelSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Divider()
-                .padding(.vertical, 8)
-
             formRow(label: "SSH Tunnel") {
                 Toggle("", isOn: $viewModel.sshEnabled.animation(.easeInOut(duration: 0.2)))
                     .labelsHidden()
@@ -265,6 +272,20 @@ struct ConnectionFormView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Database Section Header
+
+    private var databaseSectionHeader: some View {
+        HStack(spacing: 8) {
+            VStack { Divider() }
+            Text(viewModel.sshEnabled ? "Database (via SSH tunnel)" : "Database")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .layoutPriority(1)
+            VStack { Divider() }
+        }
+        .padding(.vertical, 8)
     }
 
     // MARK: - SSH Password Field
@@ -406,6 +427,10 @@ struct ConnectionFormView: View {
                 focused: $isNameFieldFocused
             )
 
+            sshTunnelSection
+
+            databaseSectionHeader
+
             formRow(label: "Connection String", alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
                     TextEditor(text: $viewModel.connectionString)
@@ -449,8 +474,6 @@ struct ConnectionFormView: View {
 
                 }
             }
-
-            sshTunnelSection
         }
     }
 
