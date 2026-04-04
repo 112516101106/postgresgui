@@ -18,17 +18,58 @@ enum KeychainService {
 
     // Save password to Keychain
     static func savePassword(_ password: String, for connectionId: UUID) throws {
-        let passwordData = password.data(using: .utf8)!
-        let account = connectionId.uuidString
+        try saveItem(password, account: connectionId.uuidString)
+    }
 
-        // Delete existing password if any
-        try? deletePassword(for: connectionId)
+    /// Get password from Keychain
+    static func getPassword(for connectionId: UUID) throws -> String? {
+        try getItem(account: connectionId.uuidString)
+    }
+    
+    /// Delete password from Keychain
+    static func deletePassword(for connectionId: UUID) throws {
+        try deleteItem(account: connectionId.uuidString)
+    }
+
+    // MARK: - SSH Credentials
+
+    static func saveSSHPassword(_ password: String, for connectionId: UUID) throws {
+        try saveItem(password, account: "\(connectionId.uuidString).ssh-password")
+    }
+
+    static func getSSHPassword(for connectionId: UUID) throws -> String? {
+        try getItem(account: "\(connectionId.uuidString).ssh-password")
+    }
+
+    static func deleteSSHPassword(for connectionId: UUID) throws {
+        try deleteItem(account: "\(connectionId.uuidString).ssh-password")
+    }
+
+    static func saveSSHPassphrase(_ passphrase: String, for connectionId: UUID) throws {
+        try saveItem(passphrase, account: "\(connectionId.uuidString).ssh-passphrase")
+    }
+
+    static func getSSHPassphrase(for connectionId: UUID) throws -> String? {
+        try getItem(account: "\(connectionId.uuidString).ssh-passphrase")
+    }
+
+    static func deleteSSHPassphrase(for connectionId: UUID) throws {
+        try deleteItem(account: "\(connectionId.uuidString).ssh-passphrase")
+    }
+
+    // MARK: - Private Helpers
+
+    private static func saveItem(_ value: String, account: String) throws {
+        let data = value.data(using: .utf8)!
+
+        // Delete existing item if any
+        try? deleteItem(account: account)
 
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,
             kSecAttrAccount as String: account,
-            kSecValueData as String: passwordData,
+            kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
             kSecAttrAccessGroup as String: accessGroup
         ]
@@ -39,11 +80,8 @@ enum KeychainService {
             throw KeychainError.saveFailed(status)
         }
     }
-    
-    /// Get password from Keychain
-    static func getPassword(for connectionId: UUID) throws -> String? {
-        let account = connectionId.uuidString
 
+    private static func getItem(account: String) throws -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,
@@ -65,17 +103,14 @@ enum KeychainService {
         }
 
         guard let data = result as? Data,
-              let password = String(data: data, encoding: .utf8) else {
+              let value = String(data: data, encoding: .utf8) else {
             throw KeychainError.invalidData
         }
 
-        return password
+        return value
     }
-    
-    /// Delete password from Keychain
-    static func deletePassword(for connectionId: UUID) throws {
-        let account = connectionId.uuidString
 
+    private static func deleteItem(account: String) throws {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: serviceName,

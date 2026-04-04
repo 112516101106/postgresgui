@@ -10,6 +10,7 @@ import SwiftUI
 enum ConnectionTestStatus: Equatable {
     case idle
     case testing
+    case testingSSH
     case success
     case error(message: String)
 }
@@ -24,7 +25,9 @@ struct ConnectionStatusBanner: View {
             case .idle:
                 EmptyView()
             case .testing:
-                testingBanner()
+                testingBanner(message: "Testing connection...")
+            case .testingSSH:
+                testingBanner(message: "Establishing SSH tunnel...")
             case .success:
                 successBanner()
             case .error(let message):
@@ -35,11 +38,11 @@ struct ConnectionStatusBanner: View {
     
     // MARK: - Testing State
     
-    private func testingBanner() -> some View {
+    private func testingBanner(message: String) -> some View {
         HStack(spacing: 12) {
             SpinnerIcon()
-            
-            Text("Testing connection...")
+
+            Text(message)
                 .font(.system(size: 13))
             
             Spacer()

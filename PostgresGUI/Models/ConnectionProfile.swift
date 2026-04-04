@@ -20,6 +20,14 @@ final class ConnectionProfile: Identifiable {
     var sslMode: String
     var password: String?
 
+    // SSH Tunnel fields
+    var sshEnabled: Bool
+    var sshHost: String?
+    var sshPort: Int?
+    var sshUsername: String?
+    var sshAuthMethod: String?
+    var sshPrivateKeyPath: String?
+
     init(
         id: UUID = UUID(),
         name: String?,
@@ -29,7 +37,13 @@ final class ConnectionProfile: Identifiable {
         database: String = Constants.PostgreSQL.defaultDatabase,
         isFavorite: Bool = false,
         sslMode: SSLMode = .default,
-        password: String? = nil
+        password: String? = nil,
+        sshEnabled: Bool = false,
+        sshHost: String? = nil,
+        sshPort: Int? = nil,
+        sshUsername: String? = nil,
+        sshAuthMethod: SSHAuthMethod? = nil,
+        sshPrivateKeyPath: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -40,6 +54,12 @@ final class ConnectionProfile: Identifiable {
         self.isFavorite = isFavorite
         self.sslMode = sslMode.rawValue
         self.password = password
+        self.sshEnabled = sshEnabled
+        self.sshHost = sshHost
+        self.sshPort = sshPort
+        self.sshUsername = sshUsername
+        self.sshAuthMethod = sshAuthMethod?.rawValue
+        self.sshPrivateKeyPath = sshPrivateKeyPath
     }
 }
 
@@ -47,6 +67,11 @@ extension ConnectionProfile {
     /// Get the SSL mode as an enum
     var sslModeEnum: SSLMode {
         SSLMode(rawValue: sslMode) ?? .default
+    }
+
+    /// Get the SSH auth method as an enum
+    var sshAuthMethodEnum: SSHAuthMethod {
+        sshAuthMethod.flatMap { SSHAuthMethod(rawValue: $0) } ?? .password
     }
 
     /// Extract the root domain from the host

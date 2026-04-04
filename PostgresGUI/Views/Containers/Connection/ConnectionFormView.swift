@@ -102,7 +102,8 @@ struct ConnectionFormView: View {
             }
             .navigationTitle(viewModel.navigationTitle)
         }
-        .frame(width: 500, height: 440)
+        .frame(width: 500, height: viewModel.sshEnabled ? 700 : 440)
+        .animation(.easeInOut(duration: 0.2), value: viewModel.sshEnabled)
         .alert("Keychain Access Denied", isPresented: $viewModel.showKeychainAlert) {
             Button("OK") {
                 viewModel.showKeychainAlert = false
@@ -194,6 +195,161 @@ struct ConnectionFormView: View {
             formRow(label: "Password") {
                 passwordField
             }
+
+            sshTunnelSection
+        }
+    }
+
+    // MARK: - SSH Tunnel Section
+
+    private var sshTunnelSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Divider()
+                .padding(.vertical, 8)
+
+            formRow(label: "SSH Tunnel") {
+                Toggle("", isOn: $viewModel.sshEnabled.animation(.easeInOut(duration: 0.2)))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+
+            if viewModel.sshEnabled {
+                formRow(label: "SSH Host") {
+                    TextField("bastion.example.com", text: $viewModel.sshHost)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                formRow(label: "SSH Port") {
+                    TextField("22", text: $viewModel.sshPort)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                formRow(label: "SSH User") {
+                    TextField("", text: $viewModel.sshUsername)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                formRow(label: "Auth Mode") {
+                    Picker("", selection: $viewModel.sshAuthMethod) {
+                        ForEach(SSHAuthMethod.allCases, id: \.self) { method in
+                            Text(method.displayName).tag(method)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
+
+                if viewModel.sshAuthMethod == .password {
+                    formRow(label: "SSH Password") {
+                        sshPasswordField
+                    }
+                } else {
+                    formRow(label: "Private Key") {
+                        HStack(spacing: 8) {
+                            TextField("~/.ssh/id_ed25519", text: $viewModel.sshPrivateKeyPath)
+                                .textFieldStyle(.roundedBorder)
+                            Button("Browse") {
+                                viewModel.browseForPrivateKey()
+                            }
+                        }
+                    }
+
+                    formRow(label: "Passphrase") {
+                        VStack(alignment: .leading, spacing: 2) {
+                            sshPassphraseField
+                            Text("Optional — only needed for encrypted keys")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - SSH Password Field
+
+    private var sshPasswordField: some View {
+        HStack(spacing: 8) {
+            Group {
+                if viewModel.showSSHPassword {
+                    TextField("", text: Binding(
+                        get: {
+                            if viewModel.hasStoredSSHPassword && !viewModel.sshPasswordModified {
+                                return viewModel.actualStoredSSHPassword
+                            }
+                            return viewModel.sshPassword
+                        },
+                        set: { viewModel.handleSSHPasswordChange($0) }
+                    ))
+                } else {
+                    SecureField("", text: Binding(
+                        get: {
+                            if viewModel.hasStoredSSHPassword && !viewModel.sshPasswordModified {
+                                return String(repeating: "\u{2022}", count: 8)
+                            }
+                            return viewModel.sshPassword
+                        },
+                        set: { viewModel.handleSSHPasswordChange($0) }
+                    ))
+                }
+            }
+            .textFieldStyle(.roundedBorder)
+
+            Button(action: {
+                if !viewModel.showSSHPassword && viewModel.hasStoredSSHPassword && viewModel.actualStoredSSHPassword.isEmpty {
+                    guard viewModel.loadSSHPasswordFromKeychain() else { return }
+                }
+                viewModel.showSSHPassword.toggle()
+            }) {
+                Image(systemName: viewModel.showSSHPassword ? "eye.fill" : "eye.slash.fill")
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help(viewModel.showSSHPassword ? "Hide password" : "Show password")
+        }
+    }
+
+    // MARK: - SSH Passphrase Field
+
+    private var sshPassphraseField: some View {
+        HStack(spacing: 8) {
+            Group {
+                if viewModel.showSSHPassphrase {
+                    TextField("", text: Binding(
+                        get: {
+                            if viewModel.hasStoredSSHPassphrase && !viewModel.sshPassphraseModified {
+                                return viewModel.actualStoredSSHPassphrase
+                            }
+                            return viewModel.sshPassphrase
+                        },
+                        set: { viewModel.handleSSHPassphraseChange($0) }
+                    ))
+                } else {
+                    SecureField("", text: Binding(
+                        get: {
+                            if viewModel.hasStoredSSHPassphrase && !viewModel.sshPassphraseModified {
+                                return String(repeating: "\u{2022}", count: 8)
+                            }
+                            return viewModel.sshPassphrase
+                        },
+                        set: { viewModel.handleSSHPassphraseChange($0) }
+                    ))
+                }
+            }
+            .textFieldStyle(.roundedBorder)
+
+            Button(action: {
+                if !viewModel.showSSHPassphrase && viewModel.hasStoredSSHPassphrase && viewModel.actualStoredSSHPassphrase.isEmpty {
+                    guard viewModel.loadSSHPassphraseFromKeychain() else { return }
+                }
+                viewModel.showSSHPassphrase.toggle()
+            }) {
+                Image(systemName: viewModel.showSSHPassphrase ? "eye.fill" : "eye.slash.fill")
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help(viewModel.showSSHPassphrase ? "Hide passphrase" : "Show passphrase")
         }
     }
 
@@ -293,6 +449,8 @@ struct ConnectionFormView: View {
 
                 }
             }
+
+            sshTunnelSection
         }
     }
 

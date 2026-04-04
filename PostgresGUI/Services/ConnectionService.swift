@@ -17,6 +17,9 @@ class ConnectionService: ConnectionServiceProtocol {
     private let keychainService: KeychainServiceProtocol
     private let userDefaults: UserDefaultsProtocol
 
+    /// Active SSH tunnel manager, kept alive for the duration of the connection
+    private var sshTunnelManager: SSHTunnelManager?
+
     init(appState: AppState, keychainService: KeychainServiceProtocol, userDefaults: UserDefaultsProtocol? = nil) {
         self.appState = appState
         self.keychainService = keychainService
@@ -40,10 +43,49 @@ class ConnectionService: ConnectionServiceProtocol {
                 actualPassword = try keychainService.getPassword(for: connection.id) ?? ""
             }
 
-            // Connect to database
+            var connectHost = connection.host
+            var connectPort = connection.port
+
+            // Establish SSH tunnel if enabled
+            if connection.sshEnabled {
+                DebugLog.print("🔒 [ConnectionService] Setting up SSH tunnel")
+
+                // Tear down any existing tunnel
+                if let existingTunnel = sshTunnelManager {
+                    await existingTunnel.teardown()
+                }
+
+                let sshPassword = connection.sshAuthMethodEnum == .password
+                    ? try keychainService.getSSHPassword(for: connection.id) : nil
+                let sshPassphrase = connection.sshAuthMethodEnum == .privateKey
+                    ? try keychainService.getSSHPassphrase(for: connection.id) : nil
+
+                let sshConfig = SSHTunnelConfig(
+                    sshHost: connection.sshHost ?? "",
+                    sshPort: connection.sshPort ?? 22,
+                    sshUsername: connection.sshUsername ?? "",
+                    authMethod: connection.sshAuthMethodEnum,
+                    password: sshPassword,
+                    privateKeyPath: connection.sshPrivateKeyPath,
+                    passphrase: sshPassphrase,
+                    remoteHost: connection.host,
+                    remotePort: connection.port
+                )
+
+                let manager = SSHTunnelManager()
+                let localPort = try await manager.establish(config: sshConfig)
+                sshTunnelManager = manager
+
+                connectHost = "127.0.0.1"
+                connectPort = localPort
+
+                DebugLog.print("🔒 [ConnectionService] SSH tunnel established on port \(localPort)")
+            }
+
+            // Connect to database (through tunnel if SSH enabled)
             try await appState.connection.databaseService.connect(
-                host: connection.host,
-                port: connection.port,
+                host: connectHost,
+                port: connectPort,
                 username: connection.username,
                 password: actualPassword,
                 database: connection.database,
@@ -77,6 +119,12 @@ class ConnectionService: ConnectionServiceProtocol {
 
             DebugLog.print("❌ [ConnectionService] Connection failed: \(error)")
 
+            // Tear down SSH tunnel on failure
+            if let tunnel = sshTunnelManager {
+                await tunnel.teardown()
+                sshTunnelManager = nil
+            }
+
             // Reset connection state on error
             appState.connection.currentConnection = nil
 
@@ -88,6 +136,14 @@ class ConnectionService: ConnectionServiceProtocol {
     func disconnect() async {
         DebugLog.print("🔌 [ConnectionService] Disconnecting")
         await appState.connection.databaseService.disconnect()
+
+        // Tear down SSH tunnel if active
+        if let tunnel = sshTunnelManager {
+            DebugLog.print("🔒 [ConnectionService] Tearing down SSH tunnel")
+            await tunnel.teardown()
+            sshTunnelManager = nil
+        }
+
         appState.connection.currentConnection = nil
         appState.connection.databases = []
         appState.connection.databasesVersion += 1
@@ -100,12 +156,11 @@ class ConnectionService: ConnectionServiceProtocol {
     func delete(connection: ConnectionProfile, from modelContext: ModelContext) async {
         DebugLog.print("🗑️ [ConnectionService] Deleting connection: \(connection.displayName)")
 
-        // Delete password from keychain
-        do {
-            try keychainService.deletePassword(for: connection.id)
-        } catch {
-            DebugLog.print("⚠️ [ConnectionService] Failed to delete password from keychain: \(error)")
-        }
+        // Delete all keychain entries (DB password + SSH credentials)
+        // Use try? per call so one failure doesn't prevent the others
+        try? keychainService.deletePassword(for: connection.id)
+        try? keychainService.deleteSSHPassword(for: connection.id)
+        try? keychainService.deleteSSHPassphrase(for: connection.id)
 
         // If deleting the active connection, disconnect first
         if appState.connection.currentConnection?.id == connection.id {

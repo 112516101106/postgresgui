@@ -19,6 +19,26 @@ protocol KeychainServiceProtocol {
 
     /// Delete password from secure storage
     func deletePassword(for connectionId: UUID) throws
+
+    // MARK: - SSH Credentials
+
+    /// Save SSH password to secure storage
+    func saveSSHPassword(_ password: String, for connectionId: UUID) throws
+
+    /// Retrieve SSH password from secure storage
+    func getSSHPassword(for connectionId: UUID) throws -> String?
+
+    /// Delete SSH password from secure storage
+    func deleteSSHPassword(for connectionId: UUID) throws
+
+    /// Save SSH private key passphrase to secure storage
+    func saveSSHPassphrase(_ passphrase: String, for connectionId: UUID) throws
+
+    /// Retrieve SSH private key passphrase from secure storage
+    func getSSHPassphrase(for connectionId: UUID) throws -> String?
+
+    /// Delete SSH private key passphrase from secure storage
+    func deleteSSHPassphrase(for connectionId: UUID) throws
 }
 
 /// Implementation that delegates to existing KeychainService enum
@@ -34,6 +54,32 @@ class KeychainServiceImpl: KeychainServiceProtocol {
 
     func deletePassword(for connectionId: UUID) throws {
         try KeychainService.deletePassword(for: connectionId)
+    }
+
+    // MARK: - SSH Credentials
+
+    func saveSSHPassword(_ password: String, for connectionId: UUID) throws {
+        try KeychainService.saveSSHPassword(password, for: connectionId)
+    }
+
+    func getSSHPassword(for connectionId: UUID) throws -> String? {
+        try KeychainService.getSSHPassword(for: connectionId)
+    }
+
+    func deleteSSHPassword(for connectionId: UUID) throws {
+        try KeychainService.deleteSSHPassword(for: connectionId)
+    }
+
+    func saveSSHPassphrase(_ passphrase: String, for connectionId: UUID) throws {
+        try KeychainService.saveSSHPassphrase(passphrase, for: connectionId)
+    }
+
+    func getSSHPassphrase(for connectionId: UUID) throws -> String? {
+        try KeychainService.getSSHPassphrase(for: connectionId)
+    }
+
+    func deleteSSHPassphrase(for connectionId: UUID) throws {
+        try KeychainService.deleteSSHPassphrase(for: connectionId)
     }
 }
 
