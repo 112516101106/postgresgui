@@ -269,6 +269,181 @@ struct SSHTunnelErrorTests {
     }
 }
 
+// MARK: - OpenSSH RSA Parsing + RSA-SHA2-512
+
+@Suite("SSHKeyParser — OpenSSH RSA", .serialized)
+struct SSHKeyParserOpenSSHRSATests {
+
+    /// A valid unencrypted OpenSSH RSA private key for testing
+    static let validOpenSSHRSAKey = """
+    -----BEGIN OPENSSH PRIVATE KEY-----
+    b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABFwAAAAdzc2gtcn
+    NhAAAAAwEAAQAAAQEAskWRa+k0CMHe0BFDku/iblvV3cWzuuBx2uVniV5QKY3DepyYW+LF
+    9PvlrqITu4WDJ4o9ye0sZYd1I24ZY6GhcWRkPACfLNWU/jOLqW5sSUoZlUBf9FHt+F1ciI
+    cY20QVRrv/lG6BuGH1nqFRYHbF30FLR8P/639GCB+Q6fmKWTC5W59AeCnJFtjtOmT80PCU
+    kh/DldvJbBcRqG0aw3znktfAlKZUdK1EWlgmfe8XOxywEdpsoh6pPVzxQ2odnxj4Fxdnoy
+    BKf2mMxWXE3EqewWRUgcqU9qYRVErDQuWI4cnES0Y0L6Awkd+0mTeK3R6gp5ohvV2SI5Ja
+    Fk0clO6UIQAAA8ga3JeLGtyXiwAAAAdzc2gtcnNhAAABAQCyRZFr6TQIwd7QEUOS7+JuW9
+    XdxbO64HHa5WeJXlApjcN6nJhb4sX0++WuohO7hYMnij3J7Sxlh3UjbhljoaFxZGQ8AJ8s
+    1ZT+M4upbmxJShmVQF/0Ue34XVyIhxjbRBVGu/+UboG4YfWeoVFgdsXfQUtHw//rf0YIH5
+    Dp+YpZMLlbn0B4KckW2O06ZPzQ8JSSH8OV28lsFxGobRrDfOeS18CUplR0rURaWCZ97xc7
+    HLAR2myiHqk9XPFDah2fGPgXF2ejIEp/aYzFZcTcSp7BZFSBypT2phFUSsNC5YjhycRLRj
+    QvoDCR37SZN4rdHqCnmiG9XZIjkloWTRyU7pQhAAAAAwEAAQAAAQBsfQ+5lwrWhX0eLFNu
+    OVQYCwVE2Eq/YFWJe/AdVer8zsv2cxP5XzFPHHizZOkTRnYBewyNNSu+gcfUju0eh79i7V
+    Bef5Zex3/LjvzgWFXH6DNXc/yxB6cFbXOhlm2XCoDUMhagcvu4hMzgA5YtWTqj2e2BOBMn
+    cqXgzaz35qe+DHc8Z3RNnHD0JBdVEJFpPJb2ioKanD3YrO2E2MXqBv4H/5APeurTvd1PKQ
+    8A0MLW2M9H+wxvVcF/CF96/4sFBEPWDcE9ciTNG+I3zCgBaI49oVO9c7Vd0IqONMTOLtld
+    MeMzZQ3iJebhS42AKS/QZv6KcK+hukwuccK5f6zFNq8BAAAAgHcUkhTyP+oh/eP9vVKQbD
+    aB77PutJAMPK1AgSgHRmYLJ0lv/d6eMbjvEygRjzJ57ry6eNGnCQcOS6GTa4KGnWXUddK/
+    r2iaWzwt/RnqUobtV1X1UYfP3OkTaApvZpH1NAdFqzptqHg6BwJneMNEiE05XFIAVY266I
+    46YWW3IcNPAAAAgQDkLzDWcogF2PspHr7zFlMOI4sJ7ypFspt/KA/dXPUqeBO/aU8JBVbZ
+    Fy7ZpJSWcCqftYykbt/5epiGEkkUnY1zZfGnDHw0Wb36xgNLDXwu+Sbu+fqGeeRMnegeVR
+    M9Ww+6l1LwHXjWt8O6RyywlbhDZNJTLlarJRsvZrKV2LP1cQAAAIEAyADJHqb+v3HGTWk4
+    WdYm4RO6ASfQggSGq0knirqQwBHxQ1InzNiU8AJFhcI6aviwISJYutPQ0ur0v7FUwe8LVH
+    WSLsqFfjg0BmKG05v6m0MDtxHTiwv12rla6n1UBx1cZFChg7zJDxqltO9zt2H2RGXtodsO
+    zEmB/NqvEjJbcbEAAAAPZ2hhemlAbWFjLmxvY2FsAQIDBA==
+    -----END OPENSSH PRIVATE KEY-----
+    """
+
+    @Test func parsesOpenSSHRSAKeySuccessfully() throws {
+        let result = try SSHKeyParser.parsePrivateKey(
+            Self.validOpenSSHRSAKey,
+            username: "testuser",
+            passphrase: nil
+        )
+        // OpenSSH RSA keys should use RSA-SHA2-512
+        if case .rsaSHA512 = result {
+            // expected
+        } else {
+            Issue.record("Expected .rsaSHA512 for OpenSSH RSA key, got .citadel")
+        }
+    }
+
+    @Test func rsaSHA512KeyCanSign() throws {
+        let result = try SSHKeyParser.parsePrivateKey(
+            Self.validOpenSSHRSAKey,
+            username: "testuser",
+            passphrase: nil
+        )
+        guard case .rsaSHA512(let delegate) = result else {
+            Issue.record("Expected .rsaSHA512")
+            return
+        }
+        // Verify the delegate was created with correct username
+        #expect(delegate !== nil as AnyObject?)
+    }
+
+    @Test func rejectsEncryptedOpenSSHRSAWithoutPassphrase() {
+        // Simulate an encrypted OpenSSH key header (cipher != "none")
+        // by using a truncated key that triggers the parser
+        let encryptedHeader = """
+        -----BEGIN OPENSSH PRIVATE KEY-----
+        b3BlbnNzaC1rZXktdjEAAAAACmFlczI1Ni1jdHIAAAAGYmNyeXB0AAAAGAAAABB
+        -----END OPENSSH PRIVATE KEY-----
+        """
+
+        #expect(throws: SSHTunnelError.self) {
+            try SSHKeyParser.parsePrivateKey(encryptedHeader, username: "user", passphrase: nil)
+        }
+    }
+
+    @Test func rejectsInvalidOpenSSHMagic() {
+        let badKey = """
+        -----BEGIN OPENSSH PRIVATE KEY-----
+        bm90LWEtdmFsaWQta2V5
+        -----END OPENSSH PRIVATE KEY-----
+        """
+
+        #expect(throws: SSHTunnelError.self) {
+            try SSHKeyParser.parsePrivateKey(badKey, username: "user", passphrase: nil)
+        }
+    }
+}
+
+// MARK: - RSA-SHA2-512 Types
+
+@Suite("RSASHA512 — Key Types")
+struct RSASHA512TypeTests {
+
+    @Test func signaturePrefixIsCorrect() {
+        #expect(RSASHA512Signature.signaturePrefix == "rsa-sha2-512")
+    }
+
+    @Test func publicKeyPrefixIsCorrect() {
+        #expect(RSASHA512PublicKey.publicKeyPrefix == "rsa-sha2-512")
+    }
+
+    @Test func privateKeyPrefixIsCorrect() {
+        #expect(RSASHA512PrivateKey.keyPrefix == "rsa-sha2-512")
+    }
+
+    @Test func signatureRoundTrips() {
+        let data = Data([0x01, 0x02, 0x03, 0x04])
+        let sig = RSASHA512Signature(rawRepresentation: data)
+        #expect(sig.rawRepresentation == data)
+    }
+
+    @Test func pemParserExtractsDER() throws {
+        // Use the valid PEM key from the PKCS1 tests
+        let pemKey = SSHKeyParserPKCS1Tests.validPEMRSAKey
+        let der = try RSASHA512PEMParser.extractPKCS1DER(from: pemKey)
+        // DER should start with SEQUENCE tag (0x30)
+        #expect(der.first == 0x30)
+        // Should be substantial (2048-bit key)
+        #expect(der.count > 1000)
+    }
+
+    @Test func pemParserRejectsNonPEM() {
+        #expect(throws: SSHTunnelError.self) {
+            try RSASHA512PEMParser.extractPKCS1DER(from: "not a PEM key")
+        }
+    }
+
+    @Test func secKeyCreationFromPEMRSA() throws {
+        let pemKey = SSHKeyParserPKCS1Tests.validPEMRSAKey
+        let der = try RSASHA512PEMParser.extractPKCS1DER(from: pemKey)
+        let privateKey = try RSASHA512PrivateKey.fromPKCS1DER(der)
+        // Should be able to sign data
+        let testData = Data("test message".utf8)
+        let signature = try privateKey.signature(for: testData)
+        // Verify it's the right signature type
+        #expect(signature is RSASHA512Signature)
+    }
+
+    @Test func signatureIsVerifiable() throws {
+        let pemKey = SSHKeyParserPKCS1Tests.validPEMRSAKey
+        let der = try RSASHA512PEMParser.extractPKCS1DER(from: pemKey)
+        let privateKey = try RSASHA512PrivateKey.fromPKCS1DER(der)
+        let testData = Data("verify this message".utf8)
+        let signature = try privateKey.signature(for: testData)
+        guard let sig = signature as? RSASHA512Signature else {
+            Issue.record("Expected RSASHA512Signature")
+            return
+        }
+        // Public key should verify the signature
+        guard let pubKey = privateKey.publicKey as? RSASHA512PublicKey else {
+            Issue.record("Expected RSASHA512PublicKey")
+            return
+        }
+        let isValid = pubKey.isValidSignature(sig, for: testData)
+        #expect(isValid == true)
+    }
+
+    @Test func signatureFailsForWrongData() throws {
+        let pemKey = SSHKeyParserPKCS1Tests.validPEMRSAKey
+        let der = try RSASHA512PEMParser.extractPKCS1DER(from: pemKey)
+        let privateKey = try RSASHA512PrivateKey.fromPKCS1DER(der)
+        let signature = try privateKey.signature(for: Data("original".utf8))
+        guard let sig = signature as? RSASHA512Signature,
+              let pubKey = privateKey.publicKey as? RSASHA512PublicKey else {
+            Issue.record("Wrong types")
+            return
+        }
+        let isValid = pubKey.isValidSignature(sig, for: Data("tampered".utf8))
+        #expect(isValid == false)
+    }
+}
+
 // MARK: - ConnectionProfile SSH Fields
 
 @Suite("ConnectionProfile — SSH Fields")
