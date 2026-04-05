@@ -2,7 +2,7 @@
 
 ![PostgresGUI screenshot in dark mode](https://github.com/PostgresGUI/website/blob/main/public/screenshots2/PostgresGUI%20-%20Dark%20mode.png?raw=true)
 
-[![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)](https://postgresgui.com)
+[![Version](https://img.shields.io/badge/version-1.1.3-blue.svg)](https://postgresgui.com)
   [![Platform](https://img.shields.io/badge/platform-macOS%2026-lightgrey.svg)](https://www.apple.com/macos)
 
 ## Getting started
@@ -18,7 +18,7 @@
    open PostgresGUI.xcodeproj
    ```
 
-3. Configure code signing:
+3. IMPORTANT: Configure code signing:
    - Select the **PostgresGUI** target in the project navigator
    - Go to **Signing & Capabilities** tab
    - Select your **Team** from the dropdown (use your Apple ID's "Personal Team" if you don't have a paid developer account)
