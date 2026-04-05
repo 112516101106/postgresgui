@@ -21,7 +21,7 @@ final class ConnectionProfile: Identifiable {
     var password: String?
 
     // SSH Tunnel fields
-    var sshEnabled: Bool
+    var sshEnabled: Bool = false
     var sshHost: String?
     var sshPort: Int?
     var sshUsername: String?
