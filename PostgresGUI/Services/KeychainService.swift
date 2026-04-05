@@ -57,6 +57,18 @@ enum KeychainService {
         try deleteItem(account: "\(connectionId.uuidString).ssh-passphrase")
     }
 
+    static func saveSSHPrivateKey(_ key: String, for connectionId: UUID) throws {
+        try saveItem(key, account: "\(connectionId.uuidString).ssh-private-key")
+    }
+
+    static func getSSHPrivateKey(for connectionId: UUID) throws -> String? {
+        try getItem(account: "\(connectionId.uuidString).ssh-private-key")
+    }
+
+    static func deleteSSHPrivateKey(for connectionId: UUID) throws {
+        try deleteItem(account: "\(connectionId.uuidString).ssh-private-key")
+    }
+
     // MARK: - Private Helpers
 
     private static func saveItem(_ value: String, account: String) throws {

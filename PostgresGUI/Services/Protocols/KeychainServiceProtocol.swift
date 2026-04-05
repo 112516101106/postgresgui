@@ -39,6 +39,15 @@ protocol KeychainServiceProtocol {
 
     /// Delete SSH private key passphrase from secure storage
     func deleteSSHPassphrase(for connectionId: UUID) throws
+
+    /// Save SSH private key content to secure storage
+    func saveSSHPrivateKey(_ key: String, for connectionId: UUID) throws
+
+    /// Retrieve SSH private key content from secure storage
+    func getSSHPrivateKey(for connectionId: UUID) throws -> String?
+
+    /// Delete SSH private key content from secure storage
+    func deleteSSHPrivateKey(for connectionId: UUID) throws
 }
 
 /// Implementation that delegates to existing KeychainService enum
@@ -80,6 +89,18 @@ class KeychainServiceImpl: KeychainServiceProtocol {
 
     func deleteSSHPassphrase(for connectionId: UUID) throws {
         try KeychainService.deleteSSHPassphrase(for: connectionId)
+    }
+
+    func saveSSHPrivateKey(_ key: String, for connectionId: UUID) throws {
+        try KeychainService.saveSSHPrivateKey(key, for: connectionId)
+    }
+
+    func getSSHPrivateKey(for connectionId: UUID) throws -> String? {
+        try KeychainService.getSSHPrivateKey(for: connectionId)
+    }
+
+    func deleteSSHPrivateKey(for connectionId: UUID) throws {
+        try KeychainService.deleteSSHPrivateKey(for: connectionId)
     }
 }
 

@@ -159,16 +159,22 @@ actor SSHTunnelManager: SSHTunnelManagerProtocol {
             return .passwordBased(username: config.sshUsername, password: password)
 
         case .privateKey:
-            guard let keyPath = config.privateKeyPath, !keyPath.isEmpty else {
+            let keyString: String
+
+            if let content = config.privateKeyContent, !content.isEmpty {
+                // Key content from Keychain — no file access needed
+                keyString = content
+            } else if let keyPath = config.privateKeyPath, !keyPath.isEmpty {
+                // Fallback to file path (first-time use before save)
+                let expandedPath = (keyPath as NSString).expandingTildeInPath
+                guard FileManager.default.fileExists(atPath: expandedPath) else {
+                    throw SSHTunnelError.privateKeyNotFound(keyPath)
+                }
+                keyString = try String(contentsOfFile: expandedPath, encoding: .utf8)
+            } else {
                 throw SSHTunnelError.privateKeyNotFound("")
             }
 
-            let expandedPath = (keyPath as NSString).expandingTildeInPath
-            guard FileManager.default.fileExists(atPath: expandedPath) else {
-                throw SSHTunnelError.privateKeyNotFound(keyPath)
-            }
-
-            let keyString = try String(contentsOfFile: expandedPath, encoding: .utf8)
             let parsed = try SSHKeyParser.parsePrivateKey(
                 keyString,
                 username: config.sshUsername,

@@ -13,6 +13,7 @@ struct SSHTunnelConfig: Sendable {
     let authMethod: SSHAuthMethod
     let password: String?
     let privateKeyPath: String?
+    let privateKeyContent: String?
     let passphrase: String?
     /// The database host as seen from the SSH server
     let remoteHost: String

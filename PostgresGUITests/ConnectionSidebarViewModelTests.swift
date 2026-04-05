@@ -115,6 +115,9 @@ final class ToolbarRefreshMockKeychainService: KeychainServiceProtocol {
     func saveSSHPassphrase(_ passphrase: String, for connectionId: UUID) throws {}
     func getSSHPassphrase(for connectionId: UUID) throws -> String? { nil }
     func deleteSSHPassphrase(for connectionId: UUID) throws {}
+    func saveSSHPrivateKey(_ key: String, for connectionId: UUID) throws {}
+    func getSSHPrivateKey(for connectionId: UUID) throws -> String? { nil }
+    func deleteSSHPrivateKey(for connectionId: UUID) throws {}
 }
 
 @Suite("ConnectionSidebarViewModel")

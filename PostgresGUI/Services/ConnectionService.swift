@@ -59,6 +59,8 @@ class ConnectionService: ConnectionServiceProtocol {
                     ? try keychainService.getSSHPassword(for: connection.id) : nil
                 let sshPassphrase = connection.sshAuthMethodEnum == .privateKey
                     ? try keychainService.getSSHPassphrase(for: connection.id) : nil
+                let sshPrivateKey = connection.sshAuthMethodEnum == .privateKey
+                    ? try keychainService.getSSHPrivateKey(for: connection.id) : nil
 
                 let sshConfig = SSHTunnelConfig(
                     sshHost: connection.sshHost ?? "",
@@ -67,6 +69,7 @@ class ConnectionService: ConnectionServiceProtocol {
                     authMethod: connection.sshAuthMethodEnum,
                     password: sshPassword,
                     privateKeyPath: connection.sshPrivateKeyPath,
+                    privateKeyContent: sshPrivateKey,
                     passphrase: sshPassphrase,
                     remoteHost: connection.host,
                     remotePort: connection.port
@@ -161,6 +164,7 @@ class ConnectionService: ConnectionServiceProtocol {
         try? keychainService.deletePassword(for: connection.id)
         try? keychainService.deleteSSHPassword(for: connection.id)
         try? keychainService.deleteSSHPassphrase(for: connection.id)
+        try? keychainService.deleteSSHPrivateKey(for: connection.id)
 
         // If deleting the active connection, disconnect first
         if appState.connection.currentConnection?.id == connection.id {

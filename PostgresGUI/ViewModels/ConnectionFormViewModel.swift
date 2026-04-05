@@ -74,6 +74,7 @@ class ConnectionFormViewModel {
     var sshPassword: String = ""
     var showSSHPassword: Bool = false
     var sshPrivateKeyPath: String = ""
+    var sshPrivateKeyContent: String = ""
     var sshPassphrase: String = ""
     var showSSHPassphrase: Bool = false
 
@@ -633,6 +634,20 @@ class ConnectionFormViewModel {
             }
         }
 
+        // Get private key content: from form state (just browsed) or from Keychain (editing)
+        let privateKeyContentToUse: String?
+        if sshAuthMethod == .privateKey {
+            if !sshPrivateKeyContent.isEmpty {
+                privateKeyContentToUse = sshPrivateKeyContent
+            } else if let connection = connectionToEdit {
+                privateKeyContentToUse = try? keychainService.getSSHPrivateKey(for: connection.id)
+            } else {
+                privateKeyContentToUse = nil
+            }
+        } else {
+            privateKeyContentToUse = nil
+        }
+
         return SSHTunnelConfig(
             sshHost: sshHost.trimmingCharacters(in: .whitespacesAndNewlines),
             sshPort: Int(sshPort.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 22,
@@ -640,6 +655,7 @@ class ConnectionFormViewModel {
             authMethod: sshAuthMethod,
             password: sshPasswordToUse,
             privateKeyPath: sshAuthMethod == .privateKey ? sshPrivateKeyPath : nil,
+            privateKeyContent: privateKeyContentToUse,
             passphrase: sshPassphraseToUse,
             remoteHost: dbHost,
             remotePort: dbPort
@@ -658,6 +674,10 @@ class ConnectionFormViewModel {
             if response == .OK, let url = panel.url {
                 Task { @MainActor in
                     self?.sshPrivateKeyPath = url.path
+                    // Read file contents now while sandbox access is active
+                    if let content = try? String(contentsOf: url, encoding: .utf8) {
+                        self?.sshPrivateKeyContent = content
+                    }
                 }
             }
         }
@@ -760,6 +780,10 @@ class ConnectionFormViewModel {
                         try? keychainService.deleteSSHPassphrase(for: connectionId)
                     }
                 }
+                // Save private key content to Keychain
+                if !sshPrivateKeyContent.isEmpty {
+                    try keychainService.saveSSHPrivateKey(sshPrivateKeyContent, for: connectionId)
+                }
                 // Clean up password if switching from password to privateKey
                 try? keychainService.deleteSSHPassword(for: connectionId)
             }
@@ -767,6 +791,7 @@ class ConnectionFormViewModel {
             // SSH disabled — clean up any SSH credentials
             try? keychainService.deleteSSHPassword(for: connectionId)
             try? keychainService.deleteSSHPassphrase(for: connectionId)
+            try? keychainService.deleteSSHPrivateKey(for: connectionId)
         }
     }
 }

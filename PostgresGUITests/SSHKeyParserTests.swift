@@ -184,6 +184,7 @@ struct SSHTunnelConfigTests {
             authMethod: .password,
             password: "secret",
             privateKeyPath: nil,
+            privateKeyContent: nil,
             passphrase: nil,
             remoteHost: "10.0.1.5",
             remotePort: 5432
@@ -207,6 +208,7 @@ struct SSHTunnelConfigTests {
             authMethod: .privateKey,
             password: nil,
             privateKeyPath: "/Users/test/.ssh/id_rsa",
+            privateKeyContent: nil,
             passphrase: "keypass",
             remoteHost: "db.internal",
             remotePort: 5433
