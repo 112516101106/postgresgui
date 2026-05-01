@@ -27,6 +27,11 @@ final class TableRefreshService: TableRefreshServiceProtocol {
         connection: ConnectionProfile,
         appState: AppState
     ) async {
+        DebugLog.print(
+            "📥 [TableRefreshService] loadTables requested for '\(database.name)' " +
+            loadTablesStateSummary(for: database, appState: appState)
+        )
+
         // Only clear loading state if we're still the active request for this database
         defer {
             if appState.connection.selectedDatabase?.id == database.id {
@@ -34,10 +39,21 @@ final class TableRefreshService: TableRefreshServiceProtocol {
             }
         }
 
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled else {
+            DebugLog.print(
+                "⚠️ [TableRefreshService] loadTables cancelled before work started for '\(database.name)'"
+            )
+            return
+        }
 
         // Verify this is still the selected database before any work
-        guard appState.connection.selectedDatabase?.id == database.id else { return }
+        guard appState.connection.selectedDatabase?.id == database.id else {
+            DebugLog.print(
+                "⚠️ [TableRefreshService] loadTables skipped because selection changed before start " +
+                loadTablesStateSummary(for: database, appState: appState)
+            )
+            return
+        }
 
         // Extract connection values before async boundaries (Swift 6 Sendable compliance)
         let connectionId = connection.id
@@ -49,6 +65,10 @@ final class TableRefreshService: TableRefreshServiceProtocol {
         do {
             // Reconnect if not connected to target database
             if appState.connection.databaseService.connectedDatabase != database.name {
+                DebugLog.print(
+                    "🔌 [TableRefreshService] Reconnecting before loading tables for '\(database.name)' " +
+                    loadTablesStateSummary(for: database, appState: appState)
+                )
                 let password = try keychainService.getPassword(for: connectionId) ?? ""
                 try await withDatabaseTimeout {
                     try await appState.connection.databaseService.connect(
@@ -62,10 +82,21 @@ final class TableRefreshService: TableRefreshServiceProtocol {
                 }
             }
 
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                DebugLog.print(
+                    "⚠️ [TableRefreshService] loadTables cancelled after reconnect for '\(database.name)'"
+                )
+                return
+            }
 
             // Verify still selected after reconnect
-            guard appState.connection.selectedDatabase?.id == database.id else { return }
+            guard appState.connection.selectedDatabase?.id == database.id else {
+                DebugLog.print(
+                    "⚠️ [TableRefreshService] loadTables skipped after reconnect because selection changed " +
+                    loadTablesStateSummary(for: database, appState: appState)
+                )
+                return
+            }
 
             let tables = try await withDatabaseTimeout {
                 try await appState.connection.databaseService.fetchTables(database: database.name)
@@ -77,19 +108,39 @@ final class TableRefreshService: TableRefreshServiceProtocol {
 
             // Final check before writing - prevent stale data from overwriting newer results
             guard !Task.isCancelled,
-                  appState.connection.selectedDatabase?.id == database.id else { return }
+                  appState.connection.selectedDatabase?.id == database.id else {
+                DebugLog.print(
+                    "⚠️ [TableRefreshService] loadTables ignoring stale results for '\(database.name)' " +
+                    loadTablesStateSummary(for: database, appState: appState)
+                )
+                return
+            }
 
             appState.connection.tables = tables
             appState.connection.schemas = schemas
             appState.connection.selectedSchema = nil  // Reset schema filter on database change
             await appState.setSchemaSearchPath(nil)  // Reset search_path to default
+            DebugLog.print(
+                "✅ [TableRefreshService] loadTables finished for '\(database.name)' " +
+                "(tables: \(tables.count), schemas: \(schemas.count)) " +
+                loadTablesStateSummary(for: database, appState: appState)
+            )
         } catch is CancellationError {
-            // Silently ignore cancellation
+            DebugLog.print(
+                "⚠️ [TableRefreshService] loadTables cancelled during fetch for '\(database.name)'"
+            )
         } catch ConnectionError.connectionCancelled {
-            // Silently ignore - superseded by newer request
+            DebugLog.print(
+                "⚠️ [TableRefreshService] loadTables superseded for '\(database.name)'"
+            )
         } catch {
             // Only write error state if still the active request
-            guard appState.connection.selectedDatabase?.id == database.id else { return }
+            guard appState.connection.selectedDatabase?.id == database.id else {
+                DebugLog.print(
+                    "⚠️ [TableRefreshService] Ignoring loadTables error for stale request on '\(database.name)'"
+                )
+                return
+            }
             DebugLog.print("❌ [TableRefreshService] Error loading tables: \(error)")
             appState.connection.tables = []
             appState.connection.tableLoadingError = error
@@ -105,16 +156,17 @@ final class TableRefreshService: TableRefreshServiceProtocol {
     func refresh(appState: AppState) async {
         guard appState.connection.currentConnection != nil,
               appState.connection.databaseService.isConnected else {
-            DebugLog.print("⚠️ [TableRefreshService] Refresh skipped: no active connected context")
+            DebugLog.print(
+                "⚠️ [TableRefreshService] Refresh skipped: no active connected context " +
+                refreshStateSummary(appState: appState)
+            )
             return
         }
 
         let refreshStart = Date()
-        let selectedDatabaseAtStart = appState.connection.selectedDatabase?.name ?? "nil"
-        let connectedDatabaseAtStart = appState.connection.databaseService.connectedDatabase ?? "nil"
         DebugLog.print(
             "🔄 [TableRefreshService] Refresh started " +
-            "(selectedDB: \(selectedDatabaseAtStart), connectedDB: \(connectedDatabaseAtStart))"
+            refreshStateSummary(appState: appState)
         )
 
         appState.connection.isLoadingTables = true
@@ -144,7 +196,8 @@ final class TableRefreshService: TableRefreshServiceProtocol {
             let databasesFetchDuration = Date().timeIntervalSince(databasesFetchStart)
             DebugLog.print(
                 "✅ [TableRefreshService] Fetched \(databases.count) databases in " +
-                "\(String(format: "%.3f", databasesFetchDuration))s"
+                "\(String(format: "%.3f", databasesFetchDuration))s " +
+                refreshStateSummary(appState: appState)
             )
         } catch is CancellationError {
             // Silently ignore cancellation
@@ -174,7 +227,10 @@ final class TableRefreshService: TableRefreshServiceProtocol {
 
         // If no selected database, a database-list refresh is sufficient.
         guard let selectedDatabase = appState.connection.selectedDatabase else {
-            DebugLog.print("ℹ️ [TableRefreshService] No selected database, stopping after database list refresh")
+            DebugLog.print(
+                "ℹ️ [TableRefreshService] No selected database, stopping after database list refresh " +
+                refreshStateSummary(appState: appState)
+            )
             return
         }
 
@@ -183,7 +239,8 @@ final class TableRefreshService: TableRefreshServiceProtocol {
            !refreshedDatabases.contains(where: { $0.id == selectedDatabase.id }) {
             DebugLog.print(
                 "⚠️ [TableRefreshService] Selected database '\(selectedDatabase.name)' " +
-                "no longer exists after refresh; clearing selection"
+                "no longer exists after refresh; clearing selection " +
+                refreshStateSummary(appState: appState)
             )
             await clearSelectionForMissingDatabase(appState: appState)
             return
@@ -196,10 +253,14 @@ final class TableRefreshService: TableRefreshServiceProtocol {
 
         let databaseName = appState.connection.selectedDatabase?.name ?? selectedDatabase.name
         let selectedDatabaseId = appState.connection.selectedDatabase?.id ?? selectedDatabase.id
+        let selectedTableAtRefreshStart = appState.connection.selectedTable?.id ?? "nil"
 
         // Refresh tables and schemas
         let tablesAndSchemasFetchStart = Date()
-        DebugLog.print("🔄 [TableRefreshService] Fetching tables/schemas for '\(databaseName)'...")
+        DebugLog.print(
+            "🔄 [TableRefreshService] Fetching tables/schemas for '\(databaseName)' " +
+            "(selectedTableAtStart: \(selectedTableAtRefreshStart))..."
+        )
         do {
             let tables = try await withDatabaseTimeout {
                 try await appState.connection.databaseService.fetchTables(database: databaseName)
@@ -226,7 +287,8 @@ final class TableRefreshService: TableRefreshServiceProtocol {
             let tablesAndSchemasFetchDuration = Date().timeIntervalSince(tablesAndSchemasFetchStart)
             DebugLog.print(
                 "✅ [TableRefreshService] Fetched \(tables.count) tables and \(schemas.count) schemas for " +
-                "'\(databaseName)' in \(String(format: "%.3f", tablesAndSchemasFetchDuration))s"
+                "'\(databaseName)' in \(String(format: "%.3f", tablesAndSchemasFetchDuration))s " +
+                refreshStateSummary(appState: appState)
             )
 
             if let selectedSchema = appState.connection.selectedSchema,
@@ -277,6 +339,10 @@ final class TableRefreshService: TableRefreshServiceProtocol {
     }
 
     private func clearSelectionForMissingDatabase(appState: AppState) async {
+        DebugLog.print(
+            "🧹 [TableRefreshService] Clearing database-dependent selection state " +
+            refreshStateSummary(appState: appState)
+        )
         let hadSchemaSelection = appState.connection.selectedSchema != nil
         appState.connection.selectedDatabase = nil
         appState.connection.selectedTable = nil
@@ -306,6 +372,10 @@ final class TableRefreshService: TableRefreshServiceProtocol {
         guard let selectedTable = appState.connection.selectedTable,
               let refreshedTable = appState.connection.tables.first(where: { $0.id == selectedTable.id }) else {
             if appState.connection.selectedTable != nil {
+                DebugLog.print(
+                    "🧹 [TableRefreshService] Selected table no longer exists after refresh; clearing selection " +
+                    refreshStateSummary(appState: appState)
+                )
                 appState.connection.selectedTable = nil
             }
             return
@@ -313,7 +383,50 @@ final class TableRefreshService: TableRefreshServiceProtocol {
 
         // Only update if metadata changed
         if refreshedTable != selectedTable {
+            DebugLog.print(
+                "♻️ [TableRefreshService] Rebinding selected table to refreshed metadata " +
+                "(table: \(selectedTable.id))"
+            )
             appState.connection.selectedTable = refreshedTable
+        } else {
+            DebugLog.print(
+                "📌 [TableRefreshService] Preserving selected table after refresh " +
+                "(table: \(selectedTable.id))"
+            )
         }
+    }
+
+    private func refreshStateSummary(appState: AppState) -> String {
+        let connectionName = appState.connection.currentConnection?.name ?? "nil"
+        let selectedDatabase = appState.connection.selectedDatabase?.name ?? "nil"
+        let selectedTable = appState.connection.selectedTable?.id ?? "nil"
+        let selectedSchema = appState.connection.selectedSchema ?? "nil"
+        let connectedDatabase = appState.connection.databaseService.connectedDatabase ?? "nil"
+        return (
+            "(connection: \(connectionName), " +
+            "selectedDB: \(selectedDatabase), " +
+            "selectedTable: \(selectedTable), " +
+            "selectedSchema: \(selectedSchema), " +
+            "connectedDB: \(connectedDatabase), " +
+            "isConnected: \(appState.connection.databaseService.isConnected), " +
+            "isLoadingTables: \(appState.connection.isLoadingTables), " +
+            "databases: \(appState.connection.databases.count), " +
+            "tables: \(appState.connection.tables.count), " +
+            "schemas: \(appState.connection.schemas.count))"
+        )
+    }
+
+    private func loadTablesStateSummary(for database: DatabaseInfo, appState: AppState) -> String {
+        let selectedDatabase = appState.connection.selectedDatabase?.name ?? "nil"
+        let connectedDatabase = appState.connection.databaseService.connectedDatabase ?? "nil"
+        return (
+            "(targetDB: \(database.name), " +
+            "selectedDB: \(selectedDatabase), " +
+            "connectedDB: \(connectedDatabase), " +
+            "isConnected: \(appState.connection.databaseService.isConnected), " +
+            "isLoadingTables: \(appState.connection.isLoadingTables), " +
+            "tables: \(appState.connection.tables.count), " +
+            "schemas: \(appState.connection.schemas.count))"
+        )
     }
 }

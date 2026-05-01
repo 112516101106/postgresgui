@@ -34,7 +34,10 @@ struct ConnectionsDatabasesSidebar: View {
             .toolbar {
                 ToolbarItem(placement: .automatic) {
                     Button {
-                        DebugLog.print("🔄 [ConnectionsDatabasesSidebar] Refresh toolbar button clicked")
+                        DebugLog.print(
+                            "🔄 [ConnectionsDatabasesSidebar] Refresh toolbar button clicked " +
+                            refreshButtonLogContext
+                        )
                         Task { @MainActor in
                             await ensureViewModel().refreshOnDemandFromToolbar()
                         }
@@ -244,6 +247,10 @@ struct ConnectionsDatabasesSidebar: View {
             return viewModel
         }
 
+        DebugLog.print(
+            "🧩 [ConnectionsDatabasesSidebar] Creating ConnectionSidebarViewModel " +
+            refreshButtonLogContext
+        )
         let newViewModel = ConnectionSidebarViewModel(
             appState: appState,
             tabManager: tabManager,
@@ -253,6 +260,23 @@ struct ConnectionsDatabasesSidebar: View {
         )
         viewModel = newViewModel
         return newViewModel
+    }
+
+    private var refreshButtonLogContext: String {
+        let connectionName = appState.connection.currentConnection?.name ?? "nil"
+        let selectedDatabase = appState.connection.selectedDatabase?.name ?? "nil"
+        let selectedTable = appState.connection.selectedTable?.id ?? "nil"
+        let connectedDatabase = appState.connection.databaseService.connectedDatabase ?? "nil"
+        return (
+            "(connection: \(connectionName), " +
+            "selectedDB: \(selectedDatabase), " +
+            "selectedTable: \(selectedTable), " +
+            "connectedDB: \(connectedDatabase), " +
+            "isConnected: \(appState.connection.databaseService.isConnected), " +
+            "isLoadingTables: \(appState.connection.isLoadingTables), " +
+            "databases: \(appState.connection.databases.count), " +
+            "tables: \(appState.connection.tables.count))"
+        )
     }
 }
 
