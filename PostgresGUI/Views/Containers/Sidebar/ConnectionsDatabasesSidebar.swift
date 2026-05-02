@@ -24,6 +24,7 @@ struct ConnectionsDatabasesSidebar: View {
 
     // Database dropdown state
     @State private var showDatabaseDropdown = false
+
     @State private var isRefreshButtonHovered = false
 
     var body: some View {
@@ -38,33 +39,42 @@ struct ConnectionsDatabasesSidebar: View {
                             "🔄 [ConnectionsDatabasesSidebar] Refresh toolbar button clicked " +
                             refreshButtonLogContext
                         )
+                        appState.connection.sidebarRefreshFeedbackRequestId += 1
+                        let requestId = appState.connection.sidebarRefreshFeedbackRequestId
+                        appState.connection.isRefreshingSidebarMetadata = true
                         Task { @MainActor in
+                            let feedbackStartedAt = Date()
                             await ensureViewModel().refreshOnDemandFromToolbar()
+                            let remainingFeedbackDuration = max(0, 0.45 - Date().timeIntervalSince(feedbackStartedAt))
+                            if remainingFeedbackDuration > 0 {
+                                try? await Task.sleep(nanoseconds: remainingFeedbackDuration.nanoseconds)
+                            }
+                            if appState.connection.sidebarRefreshFeedbackRequestId == requestId {
+                                appState.connection.isRefreshingSidebarMetadata = false
+                            }
                         }
                     } label: {
-                        Image(systemName: "arrow.clockwise")
+                        ZStack {
+                            if appState.connection.isRefreshingSidebarMetadata {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .scaleEffect(0.86)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 15, weight: .medium))
+                            }
+                        }
+                        .frame(width: 34, height: 22)
                     }
                     .contentShape(Rectangle())
-                    .onHover { isRefreshButtonHovered = $0 }
-                    .help("")
-                    .popover(
-                        isPresented: Binding(
-                            get: { isRefreshButtonHovered },
-                            set: { newValue in
-                                if !newValue {
-                                    isRefreshButtonHovered = false
-                                }
-                            }
-                        ),
-                        arrowEdge: .bottom
-                    ) {
-                        Text("Refreshes database list and table list.")
-                            .lineLimit(2)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: 280, alignment: .center)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .padding(8)
+                    .buttonStyle(RefreshToolbarButtonStyle(
+                        isActive: appState.connection.isRefreshingSidebarMetadata,
+                        isHovered: isRefreshButtonHovered
+                    ))
+                    .onHover { isHovering in
+                        isRefreshButtonHovered = isHovering
                     }
+                    .help("Refreshes database list and table list.")
                 }
             }
             .modifier(DatabaseAlertsModifier(
@@ -183,6 +193,7 @@ struct ConnectionsDatabasesSidebar: View {
                 set: { appState.connection.expandedSchemas = $0 }
             ),
             isLoadingTables: appState.connection.isLoadingTables,
+            isShowingRefreshFeedback: appState.connection.isRefreshingSidebarMetadata,
             isExecutingQuery: appState.query.isExecutingQuery,
             selectedDatabase: appState.connection.selectedDatabase,
             refreshQueryAction: { table in
@@ -274,9 +285,42 @@ struct ConnectionsDatabasesSidebar: View {
             "connectedDB: \(connectedDatabase), " +
             "isConnected: \(appState.connection.databaseService.isConnected), " +
             "isLoadingTables: \(appState.connection.isLoadingTables), " +
+            "isRefreshingSidebarMetadata: \(appState.connection.isRefreshingSidebarMetadata), " +
             "databases: \(appState.connection.databases.count), " +
             "tables: \(appState.connection.tables.count))"
         )
+    }
+}
+
+private struct RefreshToolbarButtonStyle: ButtonStyle {
+    let isActive: Bool
+    let isHovered: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(.primary)
+            .background(
+                Capsule()
+                    .fill(backgroundColor(isPressed: configuration.isPressed))
+                    .frame(width: 28, height: 22)
+            )
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.12), value: isHovered)
+            .animation(.easeOut(duration: 0.12), value: isActive)
+    }
+
+    private func backgroundColor(isPressed: Bool) -> Color {
+        if isPressed {
+            return Color.secondary.opacity(0.28)
+        }
+        if isActive {
+            return Color.secondary.opacity(0.18)
+        }
+        if isHovered {
+            return Color.secondary.opacity(0.12)
+        }
+        return Color.clear
     }
 }
 

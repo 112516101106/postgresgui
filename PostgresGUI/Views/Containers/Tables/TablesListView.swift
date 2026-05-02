@@ -27,6 +27,7 @@ struct TablesListView: View {
                 set: { appState.connection.expandedSchemas = $0 }
             ),
             isLoadingTables: appState.connection.isLoadingTables,
+            isShowingRefreshFeedback: appState.connection.isRefreshingSidebarMetadata,
             isExecutingQuery: appState.query.isExecutingQuery,
             selectedDatabase: appState.connection.selectedDatabase,
             refreshQueryAction: { table in
@@ -44,6 +45,7 @@ struct TablesListIsolated: View {
     @Binding var selectedTable: TableInfo?
     @Binding var expandedSchemas: Set<String>
     let isLoadingTables: Bool
+    let isShowingRefreshFeedback: Bool
     let isExecutingQuery: Bool
     let selectedDatabase: DatabaseInfo?
 
@@ -70,30 +72,28 @@ struct TablesListIsolated: View {
         displayedCount < tables.count
     }
 
+    private var shouldShowLoadingIndicator: Bool {
+        isLoadingTables && tables.isEmpty
+    }
+
+    private var shouldShowRefreshOverlay: Bool {
+        isShowingRefreshFeedback || (isLoadingTables && !tables.isEmpty)
+    }
+
     var body: some View {
         let _ = {
-            DebugLog.print("🔍 [TablesListView] Body computed - isLoadingTables: \(isLoadingTables), tablesCount: \(tables.count), selectedTable: \(selectedTable?.name ?? "nil"), grouped: \(shouldShowGrouped)")
+            DebugLog.print(
+                "🔍 [TablesListView] Body computed - " +
+                "isLoadingTables: \(isLoadingTables), " +
+                "refreshFeedback: \(isShowingRefreshFeedback), " +
+                "effectiveLoading: \(shouldShowLoadingIndicator), " +
+                "tablesCount: \(tables.count), " +
+                "selectedTable: \(selectedTable?.name ?? "nil"), " +
+                "grouped: \(shouldShowGrouped)"
+            )
         }()
 
-        Group {
-            if isLoadingTables {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if tables.isEmpty {
-                ContentUnavailableView {
-                    Label {
-                        Text("No tables found")
-                            .font(.title3)
-                            .fontWeight(.regular)
-                    } icon: { }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if shouldShowGrouped {
-                groupedTablesList
-            } else {
-                flatTablesList
-            }
-        }
+        baseContent
         .onChange(of: tables.count) { _, _ in
             // Reset displayed count when tables change (e.g., schema filter changed)
             displayedCount = Self.batchSize
@@ -104,10 +104,37 @@ struct TablesListIsolated: View {
         }
     }
 
+    @ViewBuilder
+    private var baseContent: some View {
+        if tables.isEmpty {
+            if shouldShowLoadingIndicator {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ContentUnavailableView {
+                    Label {
+                        Text("No tables found")
+                            .font(.title3)
+                            .fontWeight(.regular)
+                    } icon: { }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        } else if shouldShowGrouped {
+            tablesContentWithRefreshOverlay {
+                groupedTablesList
+            }
+        } else {
+            tablesContentWithRefreshOverlay {
+                flatTablesList
+            }
+        }
+    }
+
     // MARK: - Flat List (single schema or filtered)
 
     private var flatTablesList: some View {
-        List {
+        LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(displayedTables, id: \.id) { table in
                 TableListRowView(
                     table: table,
@@ -115,8 +142,8 @@ struct TablesListIsolated: View {
                     refreshQueryAction: refreshQueryAction,
                     showSchemaPrefix: selectedSchema == nil
                 )
-                .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: 2, leading: 6, bottom: 2, trailing: 0))
+                .padding(.vertical, 2)
+                .padding(.leading, 6)
             }
 
             // "Load more" button when there are more tables to show
@@ -124,8 +151,46 @@ struct TablesListIsolated: View {
                 loadMoreButton
             }
         }
-        .padding(.top, 8)
-        .listStyle(.sidebar)
+    }
+
+    private func tablesContentWithRefreshOverlay<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        ZStack {
+            ScrollView {
+                content()
+                    .padding(.top, shouldShowGrouped ? 12 : 8)
+                    .padding(.bottom, 8)
+            }
+
+            if shouldShowRefreshOverlay {
+                refreshOverlay
+                    .transition(.opacity)
+                    .zIndex(1)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(.easeOut(duration: 0.12), value: shouldShowRefreshOverlay)
+    }
+
+    private var refreshOverlay: some View {
+        ZStack {
+            Color(nsColor: .controlBackgroundColor)
+                .opacity(0.45)
+
+            VStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.regular)
+                Text("Refreshing tables...")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+            .shadow(color: .black.opacity(0.14), radius: 12, y: 4)
+        }
+        .contentShape(Rectangle())
     }
 
     private var loadMoreButton: some View {
@@ -147,7 +212,7 @@ struct TablesListIsolated: View {
     // MARK: - Grouped List (multiple schemas)
 
     private var groupedTablesList: some View {
-        List {
+        LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(groupedTables) { group in
                 SchemaGroupView(
                     group: group,
@@ -166,8 +231,6 @@ struct TablesListIsolated: View {
                 )
             }
         }
-        .padding(.top, 12)
-        .listStyle(.sidebar)
     }
 }
 

@@ -3,7 +3,7 @@
 //  PostgresGUI
 //
 //  Collapsible disclosure group for tables in a schema.
-//  Uses Section with conditional rendering instead of DisclosureGroup
+//  Uses conditional rendering instead of DisclosureGroup
 //  to avoid eager view construction of collapsed content.
 //  Implements incremental loading for large table counts.
 //
@@ -34,7 +34,9 @@ struct SchemaGroupView: View {
     }
 
     var body: some View {
-        Section {
+        VStack(alignment: .leading, spacing: 0) {
+            schemaHeader
+
             // Only render tables when expanded - prevents eager view construction
             if isExpanded {
                 ForEach(displayedTables, id: \.id) { table in
@@ -44,8 +46,8 @@ struct SchemaGroupView: View {
                         refreshQueryAction: refreshQueryAction,
                         showSchemaPrefix: false
                     )
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets(top: 2, leading: 6, bottom: 2, trailing: 0))
+                    .padding(.vertical, 2)
+                    .padding(.leading, 6)
                 }
 
                 // "Load more" button when there are more tables to show
@@ -65,8 +67,6 @@ struct SchemaGroupView: View {
                     .buttonStyle(.plain)
                 }
             }
-        } header: {
-            schemaHeader
         }
         .onChange(of: isExpanded) { _, newValue in
             if !newValue {

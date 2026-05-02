@@ -76,6 +76,8 @@ class ConnectionState {
         groupedTables = groupTablesBySchema(filteredTables)
     }
     var isLoadingTables: Bool = false
+    var isRefreshingSidebarMetadata: Bool = false
+    var sidebarRefreshFeedbackRequestId: Int = 0
     var tableLoadingError: Error? = nil
     var showTableLoadingTimeoutAlert: Bool = false
 
@@ -141,6 +143,9 @@ class ConnectionState {
         databasesVersion += 1
         schemas = []
         tables = []
+        isLoadingTables = false
+        isRefreshingSidebarMetadata = false
+        sidebarRefreshFeedbackRequestId = 0
         tableMetadataCache = [:]
 
         DebugLog.print("✅ Cleanup completed")
