@@ -178,17 +178,8 @@ struct TablesListIsolated: View {
             Color(nsColor: .controlBackgroundColor)
                 .opacity(0.45)
 
-            VStack(spacing: 8) {
-                ProgressView()
-                    .controlSize(.regular)
-                Text("Refreshing tables...")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 14)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-            .shadow(color: .black.opacity(0.14), radius: 12, y: 4)
+            ProgressView()
+                .controlSize(.regular)
         }
         .contentShape(Rectangle())
     }
