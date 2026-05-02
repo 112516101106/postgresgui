@@ -64,7 +64,7 @@ struct ConnectionsDatabasesSidebar: View {
                                     .font(.system(size: 15, weight: .medium))
                             }
                         }
-                        .frame(width: 34, height: 22)
+                        .frame(width: 34, height: 26)
                     }
                     .contentShape(Rectangle())
                     .buttonStyle(RefreshToolbarButtonStyle(
@@ -302,7 +302,7 @@ private struct RefreshToolbarButtonStyle: ButtonStyle {
             .background(
                 Capsule()
                     .fill(backgroundColor(isPressed: configuration.isPressed))
-                    .frame(width: 28, height: 22)
+                    .frame(width: 28, height: 26)
             )
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
             .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
