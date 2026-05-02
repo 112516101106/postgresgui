@@ -13,6 +13,8 @@ struct JSONViewerView: View {
     @Environment(AppState.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var showingExporter = false
+    @State private var showCopiedIcon = false
+    @State private var copyFeedbackTask: Task<Void, Never>?
     let selectedRowIDs: Set<UUID>
 
     private var selectedRows: [TableRow] {
@@ -64,8 +66,21 @@ struct JSONViewerView: View {
                             showingExporter = true
                         }
 
-                        Button("Copy JSON") {
-                            copyToClipboard()
+                        Button {
+                            handleCopyJSON()
+                        } label: {
+                            Label {
+                                Text("Copy JSON")
+                            } icon: {
+                                ZStack {
+                                    Image(systemName: "doc.on.doc")
+                                        .opacity(showCopiedIcon ? 0 : 1)
+
+                                    Image(systemName: "checkmark")
+                                        .opacity(showCopiedIcon ? 1 : 0)
+                                }
+                                .frame(width: 16, height: 16)
+                            }
                         }
                     }
                 }
@@ -79,12 +94,27 @@ struct JSONViewerView: View {
             contentType: .commaSeparatedText,
             defaultFilename: appState.connection.selectedTable?.name ?? "export"
         ) { _ in }
+        .onDisappear {
+            copyFeedbackTask?.cancel()
+        }
     }
 
-    private func copyToClipboard() {
+    private func handleCopyJSON() {
+        guard copyToClipboard() else { return }
+        showCopiedIcon = true
+        copyFeedbackTask?.cancel()
+        copyFeedbackTask = Task {
+            try? await Task.sleep(nanoseconds: 1.75.nanoseconds)
+            guard !Task.isCancelled else { return }
+            showCopiedIcon = false
+            copyFeedbackTask = nil
+        }
+    }
+
+    private func copyToClipboard() -> Bool {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(jsonString, forType: .string)
+        return pasteboard.setString(jsonString, forType: .string)
     }
 }
 
