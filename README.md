@@ -25,6 +25,20 @@
 
 4. Build and run with `Cmd+R`
 
+### Automated Local Build
+
+If you don't want to open Xcode to configure code signing manually, you can use the provided script to set your Apple Developer Team ID and run the build directly from the terminal:
+
+1. Apply your Team ID and a custom Bundle Identifier prefix:
+   ```bash
+   ./clean_pbxproj.sh YOUR_TEAM_ID com.yourname
+   ```
+   *(You can find your 10-character Team ID in your Apple Developer account)*
+
+2. Build the app and generate the DMG:
+   ```bash
+   ./build_dmg.sh
+   ```
 ### Submitting Pull Requests
 
 When you select your team in step 3, Xcode modifies `project.pbxproj` with your team ID. **Do not include this change in your pull request.**
