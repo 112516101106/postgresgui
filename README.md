@@ -5,6 +5,10 @@
 [![Version](https://img.shields.io/badge/version-1.1.4-blue.svg)](https://postgresgui.com)
   [![Platform](https://img.shields.io/badge/platform-macOS%2026-lightgrey.svg)](https://www.apple.com/macos)
 
+PostgresGUI is a focused, native [PostgreSQL GUI for Mac](https://postgresgui.com/postgresql-gui-mac).
+It connects to local and hosted PostgreSQL databases without sending connection
+details, queries, or results through a PostgresGUI server.
+
 ## Getting started
 
 1. Clone the repository:
@@ -50,7 +54,14 @@ This app uses macOS Keychain to securely store database passwords. Keychain acce
 ## Support
 
 - Visit [postgresgui.com/support](https://postgresgui.com/support) for help and documentation
-- Report bugs on [GitHub Issues](https://github.com/yourusername/postgresgui/issues)
+- Report bugs on [GitHub Issues](https://github.com/PostgresGUI/postgresgui/issues)
+
+## PostgreSQL guides
+
+- [Connect to PostgreSQL through an SSH tunnel](https://postgresgui.com/blog/ssh-tunnel-postgres)
+- [Connect PostgresGUI to Supabase](https://postgresgui.com/blog/connect-postgresgui-to-supabase)
+- [Connect PostgresGUI to Neon](https://postgresgui.com/blog/connect-postgresgui-to-neon)
+- [Read EXPLAIN ANALYZE output](https://postgresgui.com/blog/explain-analyze-postgres)
 
 ## Acknowledgments
 
