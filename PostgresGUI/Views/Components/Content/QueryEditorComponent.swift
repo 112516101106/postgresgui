@@ -21,6 +21,7 @@ struct QueryEditorComponent: View {
     // Callbacks
     let onRunQuery: () -> Void
     let onCancelQuery: () -> Void
+    let onShowHistory: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -52,6 +53,14 @@ struct QueryEditorComponent: View {
                     .tint(.red)
                     .keyboardShortcut(.escape, modifiers: [])
                 }
+
+                Button(action: onShowHistory) {
+                    Image(systemName: "clock.arrow.circlepath")
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.secondary)
+                .padding(.leading, 8)
+                .help("View Query History")
 
                 Spacer()
 

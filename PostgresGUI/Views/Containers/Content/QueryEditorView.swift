@@ -13,6 +13,7 @@ struct QueryEditorView: View {
     @Environment(TabManager.self) private var tabManager
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel: QueryEditorViewModel?
+    @State private var isShowingHistory = false
 
     /// Check if the current query (for this saved query) is executing
     private var isCurrentQueryExecuting: Bool {
@@ -48,6 +49,9 @@ struct QueryEditorView: View {
             onCancelQuery: {
                 tabManager.activeTab?.cancelQuery()
                 appState.query.cancelCurrentQuery()
+            },
+            onShowHistory: {
+                isShowingHistory = true
             }
         )
         .onAppear {
@@ -92,6 +96,12 @@ struct QueryEditorView: View {
         }
         .onChange(of: appState.query.queryText) { _, newText in
             viewModel?.handleQueryTextChange(newText)
+        }
+        .sheet(isPresented: $isShowingHistory) {
+            QueryHistoryView(onSelectQuery: { text in
+                appState.query.queryText = text
+                viewModel?.handleQueryTextChange(text)
+            })
         }
     }
 }
