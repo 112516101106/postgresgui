@@ -138,6 +138,17 @@ class QueryEditorViewModel {
         // Finish execution tracking on the tab
         executingTab.finishQueryExecution()
 
+        // Log to QueryHistory
+        let historyEntry = QueryHistory(
+            queryText: queryText,
+            executionTime: result.executionTime,
+            isSuccess: result.isSuccess,
+            databaseName: database.name,
+            connectionId: appState.connection.currentConnection?.id
+        )
+        modelContext.insert(historyEntry)
+        try? modelContext.save()
+
         // Check if this tab is still the active tab AND the same saved query is still selected
         let isStillActiveTab = tabManager.activeTab?.id == executingTabId
         let isSameSavedQuery = appState.query.currentSavedQueryId == executingSavedQueryId

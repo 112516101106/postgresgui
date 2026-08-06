@@ -123,6 +123,15 @@ enum QueryResultsDateFormat: String, CaseIterable, Identifiable {
         }
     }
 
+    func string(from date: Date, relativeTo referenceDate: Date = Date()) -> String {
+        switch self {
+        case .relative:
+            return Self.relativeFormatter.localizedString(for: date, relativeTo: referenceDate)
+        default:
+            return formatter.string(from: date)
+        }
+    }
+
     private static let sampleDate: Date = {
         var components = DateComponents()
         components.year = 2026
