@@ -98,10 +98,7 @@ struct QueryEditorView: View {
             viewModel?.handleQueryTextChange(newText)
         }
         .sheet(isPresented: $isShowingHistory) {
-            QueryHistoryView(onSelectQuery: { text in
-                appState.query.queryText = text
-                viewModel?.handleQueryTextChange(text)
-            })
+            QueryHistoryView()
         }
     }
 }

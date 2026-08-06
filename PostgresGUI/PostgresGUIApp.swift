@@ -18,50 +18,12 @@ struct PostgresGUIApp: App {
     }
 
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            ConnectionProfile.self,
-            SavedQuery.self,
-            QueryFolder.self,
-            TabState.self,
-            QueryHistory.self,
-        ])
-
-        let modelConfiguration = ModelConfiguration(
-            schema: schema,
-            isStoredInMemoryOnly: false
-        )
-
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            return try PostgresGUIModelContainerFactory.makeModelContainer()
         } catch {
-            // If migration fails, try to delete the old database
             // Critical errors should remain visible in Release builds
             Swift.print("⚠️ Failed to create ModelContainer: \(error)")
-            Swift.print("⚠️ Attempting to delete old database and create fresh...")
-
-            // Get the default store URL
-            let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            let storeURL = appSupportURL.appendingPathComponent("default.store")
-
-            do {
-                // Remove all store files
-                let storeFiles = [
-                    storeURL,
-                    storeURL.appendingPathExtension("wal"),
-                    storeURL.appendingPathExtension("shm")
-                ]
-
-                for file in storeFiles {
-                    if FileManager.default.fileExists(atPath: file.path) {
-                        try FileManager.default.removeItem(at: file)
-                        DebugLog.print("✅ Removed: \(file.lastPathComponent)")
-                    }
-                }
-
-                return try ModelContainer(for: schema, configurations: [modelConfiguration])
-            } catch {
-                fatalError("Could not create ModelContainer even after cleanup: \(error)")
-            }
+            fatalError("Could not create ModelContainer. Existing user data was left untouched: \(error)")
         }
     }()
 
