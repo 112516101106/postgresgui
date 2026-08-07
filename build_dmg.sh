@@ -11,6 +11,7 @@ xcodebuild -project PostgresGUI.xcodeproj \
            -scheme PostgresGUI \
            -configuration Release \
            -derivedDataPath build/ \
+           -allowProvisioningUpdates \
            clean build
 
 # Define paths
