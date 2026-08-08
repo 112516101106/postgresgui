@@ -11,7 +11,11 @@ xcodebuild -project PostgresGUI.xcodeproj \
            -scheme PostgresGUI \
            -configuration Release \
            -derivedDataPath build/ \
-           clean build
+           CODE_SIGN_IDENTITY="" \
+           CODE_SIGNING_REQUIRED=NO \
+           CODE_SIGN_ENTITLEMENTS="" \
+           CODE_SIGNING_ALLOWED=NO \
+           build
 
 # Define paths
 APP_PATH="build/Build/Products/Release/PostgresGUI.app"
