@@ -36,6 +36,7 @@ struct QueryEditorView: View {
             statusMessage: appState.query.statusMessage,
             lastExecutedAt: appState.query.lastExecutedAt,
             displayedElapsedTime: appState.query.displayedElapsedTime,
+            autocompleteMetadataProvider: appState.connection.databaseService.autocompleteMetadataProvider,
             queryText: Binding(
                 get: { appState.query.queryText },
                 set: { appState.query.queryText = $0 }

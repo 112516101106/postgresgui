@@ -204,6 +204,9 @@ class QueryEditorViewModel {
 
             // Refresh tables list if query modified schema
             if isSchemaModifyingQuery(queryText) {
+                if let autocompleteMetadataProvider = appState.connection.databaseService.autocompleteMetadataProvider {
+                    _ = try? await autocompleteMetadataProvider.refresh()
+                }
                 await refreshTables(database: database)
 
                 // Clear results if dropped table was the selected table
