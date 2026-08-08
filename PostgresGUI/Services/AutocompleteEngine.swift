@@ -8,50 +8,8 @@
 import Foundation
 
 enum AutocompleteEngine {
-    private nonisolated static var baseKeywords: [String] {
-        [
-            "SELECT",
-            "FROM",
-            "WHERE",
-            "JOIN",
-            "LEFT JOIN",
-            "RIGHT JOIN",
-            "INNER JOIN",
-            "ORDER BY",
-            "GROUP BY",
-            "HAVING",
-            "INSERT INTO",
-            "VALUES",
-            "UPDATE",
-            "SET",
-            "DELETE FROM",
-            "RETURNING",
-            "LIMIT",
-            "OFFSET",
-            "WITH",
-            "UNION",
-            "EXISTS",
-            "AND",
-            "OR",
-            "NOT",
-            "NULL"
-        ]
-    }
-
     private nonisolated static var postRelationKeywords: [String] {
-        [
-            "JOIN",
-            "LEFT JOIN",
-            "RIGHT JOIN",
-            "INNER JOIN",
-            "ON",
-            "WHERE",
-            "GROUP BY",
-            "ORDER BY",
-            "HAVING",
-            "LIMIT",
-            "OFFSET"
-        ]
+        PostgresKeywords.postRelationKeywords
     }
 
     private struct SuggestionCandidate {
@@ -150,10 +108,20 @@ enum AutocompleteEngine {
                 provider: provider
             )
         case .columnsGlobal:
-            return await globalColumnCandidates(
+            var results = await globalColumnCandidates(
                 aliasMap: analysis.aliasMap,
                 provider: provider
             )
+
+            // When no FROM clause yet, also suggest keywords so the
+            // dropdown is never empty even when no columns match.
+            if analysis.aliasMap.isEmpty {
+                results.append(
+                    contentsOf: allKeywordCandidates(matching: analysis.currentWord)
+                )
+            }
+
+            return results
         case .columnsSpecific(let alias):
             return await specificColumnCandidates(
                 alias: alias,
@@ -161,10 +129,17 @@ enum AutocompleteEngine {
                 provider: provider
             )
         case .keywords:
-            return keywordCandidates(
-                matching: analysis.currentWord,
-                keywords: baseKeywords
+            var results = allKeywordCandidates(matching: analysis.currentWord)
+
+            // Blend columns from all loaded tables so even typing
+            // before any SQL keyword proactively suggests column names.
+            let columns = await globalColumnCandidates(
+                aliasMap: [:],
+                provider: provider
             )
+            results.append(contentsOf: columns)
+
+            return results
         case .none:
             return []
         }
@@ -246,21 +221,34 @@ enum AutocompleteEngine {
             uniqueKeysWithValues: schemaLookupOrder.enumerated().map { ($1, $0) }
         )
 
-        let references = Set(aliasMap.values)
         var relations: [DBRelationSummary] = []
         var seenRelationOids = Set<Int64>()
 
-        for reference in references {
-            if let schemaName = reference.schemaName {
-                await ensureSchemaLoaded(named: schemaName, provider: provider)
-            }
+        let references = Set(aliasMap.values)
 
-            guard let relation = await provider.relation(for: reference),
-                  seenRelationOids.insert(relation.oid).inserted else {
-                continue
-            }
+        if !references.isEmpty {
+            // Resolve from alias map (FROM clause present)
+            for reference in references {
+                if let schemaName = reference.schemaName {
+                    await ensureSchemaLoaded(named: schemaName, provider: provider)
+                }
 
-            relations.append(relation)
+                guard let relation = await provider.relation(for: reference),
+                      seenRelationOids.insert(relation.oid).inserted else {
+                    continue
+                }
+
+                relations.append(relation)
+            }
+        } else {
+            // No FROM clause yet — show columns from all loaded search-path relations
+            for schemaName in await provider.currentSearchPathSchemas() {
+                for relation in await provider.relations(in: schemaName) {
+                    if seenRelationOids.insert(relation.oid).inserted {
+                        relations.append(relation)
+                    }
+                }
+            }
         }
 
         relations.sort { lhs, rhs in
@@ -356,14 +344,57 @@ enum AutocompleteEngine {
         )
     }
 
+    private nonisolated static func allKeywordCandidates(
+        matching currentWord: String
+    ) -> [SuggestionCandidate] {
+        var candidates: [SuggestionCandidate] = []
+
+        // Compound keywords first (e.g. "LEFT JOIN", "ORDER BY")
+        candidates.append(contentsOf: PostgresKeywords.compoundKeywords.map {
+            compoundKeywordCandidate($0, currentWord: currentWord)
+        })
+
+        // Common single keywords (high priority)
+        candidates.append(contentsOf: PostgresKeywords.commonKeywords.map {
+            keywordCandidate($0, currentWord: currentWord)
+        })
+
+        // Remaining keywords
+        let commonWords = Set(PostgresKeywords.commonKeywords.map(\.word))
+        candidates.append(contentsOf: PostgresKeywords.all.filter {
+            !commonWords.contains($0.word)
+        }.map {
+            keywordCandidate($0, currentWord: currentWord)
+        })
+
+        return candidates
+    }
+
     private nonisolated static func keywordCandidates(
         matching currentWord: String,
         keywords: [String]
     ) -> [SuggestionCandidate] {
-        keywords.map { keywordCandidate($0, currentWord: currentWord) }
+        keywords.map { compoundKeywordCandidate($0, currentWord: currentWord) }
     }
 
     private nonisolated static func keywordCandidate(
+        _ keyword: PostgresKeyword,
+        currentWord: String
+    ) -> SuggestionCandidate {
+        let renderedKeyword = renderKeyword(keyword.word, matching: currentWord)
+
+        return SuggestionCandidate(
+            item: SuggestionItem(
+                title: renderedKeyword,
+                subtitle: keyword.category.shortLabel,
+                replacementText: renderedKeyword,
+                iconType: .keyword
+            ),
+            searchText: keyword.word
+        )
+    }
+
+    private nonisolated static func compoundKeywordCandidate(
         _ keyword: String,
         currentWord: String
     ) -> SuggestionCandidate {
