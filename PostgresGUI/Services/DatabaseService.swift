@@ -24,6 +24,9 @@ class DatabaseService {
         connectionManager: connectionManager,
         queryExecutor: queryExecutor
     )
+    private lazy var liveAutocompleteMetadataProvider = DatabaseMetadataProvider(
+        catalogService: AutocompleteCatalogService(connectionManager: connectionManager)
+    )
 
     // MARK: - Connection State
 
@@ -39,6 +42,10 @@ class DatabaseService {
 
     var connectedDatabase: String? {
         currentDatabase
+    }
+
+    var autocompleteMetadataProvider: DatabaseMetadataProvider? {
+        liveAutocompleteMetadataProvider
     }
 
     init(
@@ -71,6 +78,7 @@ class DatabaseService {
         }
 
         logger.info("Connecting to \(host):\(port), database: \(database)")
+        await liveAutocompleteMetadataProvider.clear()
 
         // Get abstract TLS mode from SSLMode
         let tlsMode = sslMode.databaseTLSMode
@@ -92,10 +100,12 @@ class DatabaseService {
 
             currentDatabase = database
             _isConnected = true
+            warmAutocompleteMetadata()
             logger.info("Successfully connected")
         } catch {
             logger.error("Connection failed: \(error)")
             _isConnected = false
+            await liveAutocompleteMetadataProvider.clear()
             throw error
         }
     }
@@ -104,6 +114,7 @@ class DatabaseService {
     func disconnect() async {
         logger.info("Disconnecting")
         await connectionManager.disconnect()
+        await liveAutocompleteMetadataProvider.clear()
         currentDatabase = nil
         _isConnected = false
     }
@@ -112,6 +123,7 @@ class DatabaseService {
     func shutdown() async {
         logger.info("Shutting down DatabaseService")
         await connectionManager.shutdown()
+        await liveAutocompleteMetadataProvider.clear()
         currentDatabase = nil
         _isConnected = false
     }
@@ -141,6 +153,19 @@ class DatabaseService {
             database: database,
             tlsMode: tlsMode
         )
+    }
+
+    private func warmAutocompleteMetadata() {
+        let provider = liveAutocompleteMetadataProvider
+        let logger = self.logger
+
+        Task {
+            do {
+                try await provider.refresh()
+            } catch {
+                logger.warning("Autocomplete metadata warm-up failed: \(error)")
+            }
+        }
     }
 
     // MARK: - Database Operations (Delegated to DatabaseManagementService)

@@ -14,6 +14,7 @@ struct QueryEditorComponent: View {
     let statusMessage: String?
     let lastExecutedAt: Date?
     let displayedElapsedTime: TimeInterval
+    let autocompleteMetadataProvider: DatabaseMetadataProvider?
     
     // Bindings
     @Binding var queryText: String
@@ -71,7 +72,10 @@ struct QueryEditorComponent: View {
             .background(Color(NSColor.controlBackgroundColor))
 
             // Syntax highlighted editor
-            SyntaxHighlightedEditor(text: $queryText)
+            SyntaxHighlightedEditor(
+                text: $queryText,
+                metadataProvider: autocompleteMetadataProvider
+            )
         }
     }
 

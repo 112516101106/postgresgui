@@ -560,6 +560,9 @@ class AppState {
 
         do {
             _ = try await connection.databaseService.executeQuery(sql)
+            if let autocompleteMetadataProvider = connection.databaseService.autocompleteMetadataProvider {
+                _ = try? await autocompleteMetadataProvider.refresh()
+            }
             connection.schemaError = nil
         } catch {
             DebugLog.print("❌ Failed to set search_path: \(error)")

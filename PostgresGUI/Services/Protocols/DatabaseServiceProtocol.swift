@@ -18,6 +18,9 @@ protocol DatabaseServiceProtocol: AnyObject {
     /// The currently connected database name, if any
     var connectedDatabase: String? { get }
 
+    /// Shared metadata cache backing SQL autocomplete.
+    var autocompleteMetadataProvider: DatabaseMetadataProvider? { get }
+
     // MARK: - Connection Management
 
     /// Connect to PostgreSQL database
@@ -113,4 +116,10 @@ protocol DatabaseServiceProtocol: AnyObject {
 extension DatabaseService: DatabaseServiceProtocol {
     // DatabaseService already implements all required methods
     // No additional implementation needed
+}
+
+extension DatabaseServiceProtocol {
+    var autocompleteMetadataProvider: DatabaseMetadataProvider? {
+        nil
+    }
 }

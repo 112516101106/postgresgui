@@ -163,11 +163,20 @@ private struct SQLSyntaxHighlighter {
 
 struct SyntaxHighlightedEditor: NSViewRepresentable {
     @Binding var text: String
+    let metadataProvider: DatabaseMetadataProvider?
     @Environment(\.colorScheme) var colorScheme
+
+    init(
+        text: Binding<String>,
+        metadataProvider: DatabaseMetadataProvider? = nil
+    ) {
+        self._text = text
+        self.metadataProvider = metadataProvider
+    }
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
-        let textView = NSTextView()
+        let textView = AutocompleteTextView()
 
         // Configure text view
         textView.isEditable = true
@@ -207,14 +216,16 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
 
         // Set delegate and store references
         textView.delegate = context.coordinator
-        context.coordinator.textView = textView
-        context.coordinator.lineNumberRuler = lineNumberRuler
+        textView.autocompleteDelegate = context.coordinator
+        context.coordinator.attach(textView: textView, lineNumberRuler: lineNumberRuler)
 
         return scrollView
     }
 
     func updateNSView(_ nsView: NSScrollView, context: Context) {
-        guard let textView = nsView.documentView as? NSTextView else { return }
+        guard let textView = nsView.documentView as? AutocompleteTextView else { return }
+
+        context.coordinator.parent = self
 
         let isDark = colorScheme == .dark
         let colorSchemeChanged = context.coordinator.lastIsDark != isDark
@@ -226,6 +237,7 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
             textView.setSelectedRange(selectedRange)
             context.coordinator.applyHighlighting(to: textView, isDark: isDark)
             context.coordinator.lineNumberRuler?.needsDisplay = true
+            context.coordinator.scheduleAutocompleteRefresh(after: 0)
         } else if colorSchemeChanged {
             context.coordinator.applyHighlighting(to: textView, isDark: isDark)
         }
@@ -235,19 +247,52 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
         Coordinator(parent: self)
     }
 
-    class Coordinator: NSObject, NSTextViewDelegate {
-        private let parent: SyntaxHighlightedEditor
+    @MainActor
+    class Coordinator: NSObject, NSTextViewDelegate, AutocompleteTextViewDelegate {
+        fileprivate var parent: SyntaxHighlightedEditor
         private let highlighter = SQLSyntaxHighlighter()
+        private let suggestionState = AutocompleteSuggestionListState()
+        private lazy var suggestionHostingController = NSHostingController(
+            rootView: AutocompleteSuggestionListView(state: suggestionState) { [weak self] suggestion in
+                self?.insertSuggestion(suggestion)
+            }
+        )
+        private lazy var autocompletePopover: NSPopover = {
+            let popover = NSPopover()
+            popover.behavior = .semitransient
+            popover.animates = false
+            popover.contentViewController = suggestionHostingController
+            return popover
+        }()
         private var highlightingWorkItem: DispatchWorkItem?
+        private var autocompleteWorkItem: DispatchWorkItem?
+        private var autocompleteTask: Task<Void, Never>?
+        private var autocompleteRequestID = 0
+        private var latestAnalysis: SQLContextAnalysis?
+        private var isApplyingSuggestion = false
 
-        weak var textView: NSTextView?
+        weak var textView: AutocompleteTextView?
         weak var lineNumberRuler: LineNumberRulerView?
         var isUpdatingFromUserInput = false
         var lastIsDark = false
+        var isAutocompleteVisible: Bool {
+            autocompletePopover.isShown
+        }
 
         init(parent: SyntaxHighlightedEditor) {
             self.parent = parent
             self.lastIsDark = parent.colorScheme == .dark
+        }
+
+        deinit {
+            highlightingWorkItem?.cancel()
+            autocompleteWorkItem?.cancel()
+            autocompleteTask?.cancel()
+        }
+
+        func attach(textView: AutocompleteTextView, lineNumberRuler: LineNumberRulerView) {
+            self.textView = textView
+            self.lineNumberRuler = lineNumberRuler
         }
 
         func textDidChange(_ notification: Notification) {
@@ -267,6 +312,26 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
             }
             highlightingWorkItem = workItem
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: workItem)
+
+            guard !isApplyingSuggestion else {
+                return
+            }
+
+            scheduleAutocompleteRefresh(after: 0.15)
+        }
+
+        func textViewDidChangeSelection(_ notification: Notification) {
+            lineNumberRuler?.needsDisplay = true
+
+            guard !isApplyingSuggestion else {
+                return
+            }
+
+            scheduleAutocompleteRefresh(after: 0)
+        }
+
+        func textDidEndEditing(_ notification: Notification) {
+            closeAutocomplete()
         }
 
         func applyHighlighting(to textView: NSTextView, isDark: Bool) {
@@ -291,6 +356,199 @@ struct SyntaxHighlightedEditor: NSViewRepresentable {
                     textView.window?.makeFirstResponder(textView)
                 }
             }
+        }
+
+        func scheduleAutocompleteRefresh(after delay: TimeInterval) {
+            autocompleteWorkItem?.cancel()
+
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.refreshAutocomplete()
+            }
+            autocompleteWorkItem = workItem
+
+            if delay <= 0 {
+                DispatchQueue.main.async(execute: workItem)
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+            }
+        }
+
+        func autocompleteTextView(
+            _ textView: AutocompleteTextView,
+            moveSelection direction: AutocompleteSelectionDirection
+        ) -> Bool {
+            guard isAutocompleteVisible else {
+                return false
+            }
+
+            switch direction {
+            case .up:
+                suggestionState.moveSelection(by: -1)
+            case .down:
+                suggestionState.moveSelection(by: 1)
+            }
+
+            return true
+        }
+
+        func autocompleteTextViewInsertSelectedSuggestion(_ textView: AutocompleteTextView) -> Bool {
+            guard let suggestion = suggestionState.selectedSuggestion else {
+                return false
+            }
+
+            insertSuggestion(suggestion)
+            return true
+        }
+
+        func autocompleteTextViewDismissSuggestions(_ textView: AutocompleteTextView) -> Bool {
+            guard isAutocompleteVisible else {
+                return false
+            }
+
+            closeAutocomplete()
+            return true
+        }
+
+        private func refreshAutocomplete() {
+            autocompleteTask?.cancel()
+
+            guard let textView,
+                  let metadataProvider = parent.metadataProvider,
+                  textView.window?.firstResponder === textView else {
+                closeAutocomplete()
+                return
+            }
+
+            let selectedRange = textView.selectedRange()
+            guard selectedRange.length == 0 else {
+                closeAutocomplete()
+                return
+            }
+
+            let text = textView.string
+            let textLength = (text as NSString).length
+            guard selectedRange.location <= textLength else {
+                closeAutocomplete()
+                return
+            }
+
+            let caretIndex = String.Index(utf16Offset: selectedRange.location, in: text)
+            let analysis = SQLContextAnalyzer.analyze(text, upTo: caretIndex)
+            guard analysis.context != .none else {
+                closeAutocomplete()
+                return
+            }
+
+            autocompleteRequestID += 1
+            let requestID = autocompleteRequestID
+
+            autocompleteTask = Task { [weak self] in
+                let suggestions = await AutocompleteEngine.suggestions(
+                    for: analysis,
+                    provider: metadataProvider
+                )
+
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                await MainActor.run {
+                    guard let self, requestID == self.autocompleteRequestID else {
+                        return
+                    }
+
+                    self.presentSuggestions(suggestions, analysis: analysis)
+                }
+            }
+        }
+
+        private func presentSuggestions(
+            _ suggestions: [SuggestionItem],
+            analysis: SQLContextAnalysis
+        ) {
+            guard let textView,
+                  !suggestions.isEmpty,
+                  let caretRect = textView.calculateCaretRect(),
+                  textView.window != nil else {
+                closeAutocomplete()
+                return
+            }
+
+            latestAnalysis = analysis
+            suggestionState.apply(suggestions)
+            autocompletePopover.contentSize = NSSize(
+                width: 360,
+                height: popoverHeight(for: suggestions.count)
+            )
+
+            if autocompletePopover.isShown {
+                autocompletePopover.performClose(nil)
+            }
+
+            autocompletePopover.show(relativeTo: caretRect, of: textView, preferredEdge: .maxY)
+            textView.window?.makeFirstResponder(textView)
+        }
+
+        private func popoverHeight(for suggestionCount: Int) -> CGFloat {
+            let visibleRowCount = min(max(suggestionCount, 1), 8)
+            return CGFloat(visibleRowCount) * 32 + 12
+        }
+
+        private func closeAutocomplete() {
+            autocompleteTask?.cancel()
+            autocompleteTask = nil
+            autocompleteRequestID += 1
+            latestAnalysis = nil
+            suggestionState.apply([])
+
+            if autocompletePopover.isShown {
+                autocompletePopover.performClose(nil)
+            }
+        }
+
+        private func insertSuggestion(_ suggestion: SuggestionItem) {
+            guard let textView,
+                  let analysis = latestAnalysis else {
+                return
+            }
+
+            let replacementRange = clampedRange(
+                analysis.replacementRange.nsRange,
+                in: textView.string
+            )
+
+            guard textView.shouldChangeText(
+                in: replacementRange,
+                replacementString: suggestion.replacementText
+            ) else {
+                return
+            }
+
+            isApplyingSuggestion = true
+            closeAutocomplete()
+
+            textView.textStorage?.replaceCharacters(
+                in: replacementRange,
+                with: suggestion.replacementText
+            )
+
+            let insertedLength = (suggestion.replacementText as NSString).length
+            let caretLocation = replacementRange.location + insertedLength
+            textView.setSelectedRange(NSRange(location: caretLocation, length: 0))
+            textView.didChangeText()
+            lineNumberRuler?.needsDisplay = true
+            textView.window?.makeFirstResponder(textView)
+
+            DispatchQueue.main.async { [weak self] in
+                self?.isApplyingSuggestion = false
+            }
+        }
+
+        private func clampedRange(_ range: NSRange, in text: String) -> NSRange {
+            let textLength = (text as NSString).length
+            let location = min(max(range.location, 0), textLength)
+            let length = min(max(range.length, 0), textLength - location)
+            return NSRange(location: location, length: length)
         }
     }
 }
