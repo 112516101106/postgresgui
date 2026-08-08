@@ -29,11 +29,11 @@ enum Constants {
     enum ColumnWidth {
         static let sidebarMin: CGFloat = 200
         static let sidebarIdeal: CGFloat = 250
-        static let sidebarMax: CGFloat = 300
+        static let sidebarMax: CGFloat = 800
         
         static let tablesMin: CGFloat = 250
         static let tablesIdeal: CGFloat = 300
-        static let tablesMax: CGFloat = 400
+        static let tablesMax: CGFloat = 800
         
         static let tableColumnMin: CGFloat = 120
     }

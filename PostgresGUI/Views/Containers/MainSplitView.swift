@@ -71,6 +71,7 @@ struct MainSplitView: View {
                     .frame(minHeight: 250)
                 }
             }
+            .frame(minWidth: 400, maxWidth: .infinity)
             .toolbar {
                 if let viewModel = viewModel {
                     DetailContentToolbar(viewModel: viewModel)
