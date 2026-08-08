@@ -74,7 +74,7 @@ struct QueryResultsComponent: View {
     }
     
     private var showPagination: Bool {
-        currentPage > 0 || hasNextPage
+        !results.isEmpty
     }
 
     private var tableIdentity: String {
@@ -90,7 +90,7 @@ struct QueryResultsComponent: View {
             } else {
                 resultsContent
 
-                // Pagination row (only show if there's more than one page)
+                // Pagination row (always show if there are results)
                 if showPagination {
                     paginationBar
                 }
@@ -148,7 +148,7 @@ struct QueryResultsComponent: View {
     @ViewBuilder
     private var paginationBar: some View {
         HStack {
-            Text("\(results.count) rows")
+            Text("\(results.count) rows shown")
                 .font(.system(.body, design: .monospaced))
                 .foregroundStyle(.secondary)
 
@@ -163,9 +163,10 @@ struct QueryResultsComponent: View {
                 .buttonStyle(.borderless)
                 .disabled(!hasPreviousPage || isExecuting)
 
-                Text("Page \(currentPage + 1)")
+                Text(hasNextPage ? "Page \(currentPage + 1) of ?" : "Page \(currentPage + 1) of \(currentPage + 1)")
                     .font(.system(.body, design: .monospaced))
                     .foregroundStyle(.secondary)
+                    .help("Total pages are not computed automatically to keep queries fast.")
 
                 Button {
                     onNextPage()
@@ -199,6 +200,7 @@ struct QueryResultsComponent: View {
                     .width(min: Constants.ColumnWidth.tableColumnMin)
                 }
             }
+            .alwaysShowScrollbars()
             .id(tableIdentity)
             .onDeleteCommand {
                 if !selectedRowIDs.isEmpty {
