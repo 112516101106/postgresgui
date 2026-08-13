@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 // MARK: - Table Row Comparator
 
@@ -212,6 +213,11 @@ struct QueryResultsComponent: View {
                 }
                 return .ignored
             }
+            // Cmd+C is consumed by the standard Edit > Copy menu item, which sends
+            // `copy:` down the responder chain. `.copyable` is what answers it;
+            // `.onCopyCommand` and `.onKeyPress` never see the key at all.
+            // An empty array means no selection, and Copy stays greyed out.
+            .copyable(copyableCSV)
         }
     }
 
@@ -228,6 +234,17 @@ struct QueryResultsComponent: View {
             }
         }
         .id(tableIdentity)
+    }
+
+    /// The selected rows as a single CSV string, or empty when nothing is selected.
+    private var copyableCSV: [String] {
+        guard !selectedRowIDs.isEmpty else { return [] }
+        let csv = CSVExporter.csvForSelection(
+            rows: sortedResults,
+            selectedIDs: selectedRowIDs,
+            columns: columnNames
+        )
+        return csv.isEmpty ? [] : [csv]
     }
 
     private var filteredResults: [TableRow] {

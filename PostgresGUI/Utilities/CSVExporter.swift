@@ -40,6 +40,20 @@ enum CSVExporter {
         return csvLines.joined(separator: "\n")
     }
 
+    /// Converts the selected subset of rows to CSV, preserving the order of `rows`
+    /// - Parameters:
+    ///   - rows: Rows in display order (already sorted and filtered by the view)
+    ///   - selectedIDs: IDs of the rows to include
+    ///   - columns: Column order for the output
+    /// - Returns: CSV formatted string, or "" when nothing is selected
+    static func csvForSelection(
+        rows: [TableRow],
+        selectedIDs: Set<TableRow.ID>,
+        columns: [String]?
+    ) -> String {
+        toCSV(rows: rows.filter { selectedIDs.contains($0.id) }, columns: columns)
+    }
+
     /// Escapes a field for CSV format according to RFC 4180
     /// - Parameter field: The field value to escape
     /// - Returns: Properly escaped CSV field
