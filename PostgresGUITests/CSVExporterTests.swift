@@ -242,6 +242,66 @@ struct CSVExporterTests {
         }
     }
 
+    // MARK: - Selection Tests
+
+    @Suite("Selection")
+    struct SelectionTests {
+
+        @Test func copiesOnlySelectedRowsInGivenOrder() {
+            let grace = TableRow(values: ["name": "Grace", "age": "22"])
+            let eve = TableRow(values: ["name": "Eve", "age": "29"])
+            let alice = TableRow(values: ["name": "Alice", "age": "30"])
+            let frank = TableRow(values: ["name": "Frank", "age": "38"])
+            let bob = TableRow(values: ["name": "Bob", "age": "25"])
+            let dave = TableRow(values: ["name": "Dave", "age": "45"])
+            let carol = TableRow(values: ["name": "Carol", "age": "41"])
+
+            // Rows arrive in display order (already sorted/filtered by the view),
+            // and the selection is an unordered Set. 5 of the 7 rows are selected
+            // (120 possible orderings of the selected IDs), with two unselected
+            // rows interspersed (Grace at the start, Bob in the middle) — an
+            // implementation that iterated the Set instead of filtering `rows`
+            // would both include the unselected rows and get the order wrong
+            // almost certainly, rather than by coincidence.
+            let result = CSVExporter.csvForSelection(
+                rows: [grace, eve, alice, frank, bob, dave, carol],
+                selectedIDs: [eve.id, alice.id, frank.id, dave.id, carol.id],
+                columns: ["name", "age"]
+            )
+
+            #expect(result == "name,age\nEve,29\nAlice,30\nFrank,38\nDave,45\nCarol,41")
+        }
+
+        @Test func returnsEmptyStringWhenNothingIsSelected() {
+            let alice = TableRow(values: ["name": "Alice", "age": "30"])
+
+            let result = CSVExporter.csvForSelection(
+                rows: [alice],
+                selectedIDs: [],
+                columns: ["name", "age"]
+            )
+
+            #expect(result == "")
+        }
+
+        @Test func ignoresSelectedIDsForRowsNoLongerPresentInRows() {
+            let alice = TableRow(values: ["name": "Alice", "age": "30"])
+            let bob = TableRow(values: ["name": "Bob", "age": "25"])
+            // Simulates a row the user selected before narrowing the search
+            // filter — it's no longer in the displayed `rows` array, but its ID
+            // is still in `selectedIDs` until the selection is explicitly cleared.
+            let phantom = TableRow(values: ["name": "Phantom", "age": "99"])
+
+            let result = CSVExporter.csvForSelection(
+                rows: [alice, bob],
+                selectedIDs: [alice.id, phantom.id, bob.id],
+                columns: ["name", "age"]
+            )
+
+            #expect(result == "name,age\nAlice,30\nBob,25")
+        }
+    }
+
     // MARK: - Real-world Scenarios
 
     @Suite("Real-world Scenarios")
