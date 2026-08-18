@@ -32,6 +32,13 @@ APP_VERSION=$(defaults read "$(pwd)/$APP_PATH/Contents/Info.plist" CFBundleShort
 DMG_NAME="PostgresGUI-${APP_VERSION}.dmg"
 
 echo "✅ Build completed successfully!"
+
+# Ghi đè vào thư mục /Applications
+echo "📲 Copying PostgresGUI.app to /Applications..."
+rm -rf "/Applications/PostgresGUI.app"
+cp -R "$APP_PATH" "/Applications/"
+echo "✅ Installed to /Applications/PostgresGUI.app"
+
 echo "📦 Packaging into $DMG_NAME..."
 
 # Remove previous DMG if it exists
@@ -58,4 +65,4 @@ else
     hdiutil create -volname "PostgresGUI" -srcfolder "$APP_PATH" -ov -format UDZO "$DMG_NAME"
 fi
 
-echo "🎉 Done! The file $DMG_NAME was successfully created."
+echo "🎉 Done! The file $DMG_NAME was successfully created and installed to /Applications."
