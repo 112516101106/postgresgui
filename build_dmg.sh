@@ -27,18 +27,17 @@ if [ ! -d "$APP_PATH" ]; then
     exit 1
 fi
 
-# Extract version from the built app's Info.plist
-APP_VERSION=$(defaults read "$(pwd)/$APP_PATH/Contents/Info.plist" CFBundleShortVersionString)
-DMG_NAME="PostgresGUI-${APP_VERSION}.dmg"
-
-echo "✅ Build completed successfully!"
-
 # Ghi đè vào thư mục /Applications
 echo "📲 Copying PostgresGUI.app to /Applications..."
 rm -rf "/Applications/PostgresGUI.app"
 cp -R "$APP_PATH" "/Applications/"
 echo "✅ Installed to /Applications/PostgresGUI.app"
 
+# Extract version from the built app's Info.plist
+APP_VERSION=$(defaults read "$(pwd)/$APP_PATH/Contents/Info.plist" CFBundleShortVersionString)
+DMG_NAME="PostgresGUI-${APP_VERSION}.dmg"
+
+echo "✅ Build completed successfully!"
 echo "📦 Packaging into $DMG_NAME..."
 
 # Remove previous DMG if it exists
